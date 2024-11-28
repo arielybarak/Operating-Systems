@@ -20,6 +20,9 @@ enum ParsingError
 /*=============================================================================
 * global functions
 =============================================================================*/
-int parseCommandExample(char* line);
+int parseCommandExample(char* );
+
+int showpid (int numArgs);
 
 #endif //__COMMANDS_H__
+
