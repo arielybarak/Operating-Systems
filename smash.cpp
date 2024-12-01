@@ -4,11 +4,13 @@
 * includes, defines, usings
 =============================================================================*/
 #include <stdlib.h>
-#include "commands.h"
-#include "signals.h"
 #include <iostream>
 #include <time.h>
-#include <classes.cpp>
+#include <string.h>
+
+#include "classes.h"
+#include "commands.h"
+#include "signals.h"
 
 using std::FILE;
 using std::string;
@@ -22,6 +24,8 @@ using std::prev;
 #define STOPPED '3'
 
 
+
+
 /*=============================================================================
 * classes/structs declarations
 =============================================================================*/
@@ -30,9 +34,8 @@ using std::prev;
 =============================================================================*/
 
 char _line[MAX_LINE_SIZE];
-char* args[MAX_ARGS];
-const char* commands[9] = {"showpid","pwd","jobs","kill","fg","bg",
-															"quit",	"diff"};
+// array that contains internal commands names and their corresponding index
+
 
 
 /*=============================================================================
@@ -40,23 +43,22 @@ const char* commands[9] = {"showpid","pwd","jobs","kill","fg","bg",
 =============================================================================*/
 int main(int argc, char* argv[])
 {
-	char* args[MAX_ARGS];
-	job_arr job_array ;
+	job_arr job_list;
 	char _cmd[MAX_LINE_SIZE];
 	while(1)
 	{
+		char* args[MAX_ARGS];
 		printf("smash > ");
 		fgets(_line, MAX_LINE_SIZE, stdin);
 		strcpy(_cmd, _line);
 		_cmd[strlen(_line) + 1] = '\0';
 		//execute command
-		int numArgs = parseCommandExample(_cmd);
-
+		int numArgs = parseCommand(_cmd,args);
+		int ret_val=processReturnValue(args,numArgs,job_list);
 
 		//initialize buffers for next command
 		_line[0] = '\0';
 		_cmd[0] = '\0';
 	}
-
 	return 0;
 }
