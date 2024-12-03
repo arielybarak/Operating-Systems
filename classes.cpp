@@ -25,18 +25,38 @@ job_arr :: job_arr(){
 }
 // @brief moves a job from the list to the foreground
 // @param gets the command name
-int job_arr::fg_job_insert(char* command){
-	strcpy(jobs[0].command, command);
-	jobs[0].pid=getpid();
-	jobs[0].time_stamp = time(NULL);
-	return 0;
-}
+// int job_arr::fg_job_insert(char* command){
+// 	strcpy(jobs[0].command, command);
+// 	jobs[0].pid=getpid();
+// 	jobs[0].time_stamp = time(NULL);
+// 	return 0;
+// }
 // @brief inserts a job to the background job list
 // @param gets job pid, status(running=2, stopped=3)and the command
-int job_arr::bg_job_insert(int pid, int status, char* command){
+
+pid_t job_arr::get_FG_pid(){
+	return jobs[0].pid;
+}
+
+char* job_arr::get_FG_command(){
+	return jobs[0].command;
+}
+
+int job_arr::job_FG_remove(){
+	jobs[0].full = false;
+	return 0;
+}
+
+int job_arr::job_insert(pid_t pid, int status, char* command){
 	if(job_count >= 100){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
+	}
+	if(status == FG){
+		strcpy(jobs[0].command, command);
+		jobs[0].pid=getpid();
+		jobs[0].full = true;
+		return 0;
 	}
 	jobs[free_idx].pid = pid;
 	jobs[free_idx].status = status;
@@ -51,7 +71,7 @@ int job_arr::bg_job_insert(int pid, int status, char* command){
 	}
 	return 0;
 }
-int job_arr::job_remove(int pid){
+int job_arr::job_remove(pid_t pid){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid == pid){
 			free_idx = (free_idx<i) ? free_idx : i;
@@ -63,7 +83,7 @@ int job_arr::job_remove(int pid){
 	cout << "fail to remove job\n";
 	return 1;
 }
-int job_arr::stat_change(int pid, char stat){
+int job_arr::stat_change(pid_t pid, char stat){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid == pid){
 			jobs[i].status=stat;
@@ -86,7 +106,7 @@ void job_arr::print_fg_job(){
 		cout << "print_fg_job: " << jobs[0].command << " " << jobs[0].pid;
 		cout << endl;
 }
-int job_arr::job_2_front(int pid){
+int job_arr::job_2_front(pid_t pid){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid==pid){
 			jobs[0].pid = pid;
