@@ -34,7 +34,7 @@ using std::prev;
 /*=============================================================================
 * global variables & data structures
 =============================================================================*/
-
+job_arr job_list;
 char _line[MAX_LINE_SIZE];
 // array that contains internal commands names and their corresponding index
 
@@ -106,7 +106,11 @@ int main(int argc, char* argv[])
 		_cmd[strlen(_line) + 1] = '\0';
 		//execute command
 		int numArgs = parseCommand(_cmd,args);
-		int ret_val=processReturnValue(args,numArgs,job_list);
+		int ret_val=processReturnValue(args,numArgs);
+		if(!strcmp("quit", args[0])){
+			cout << "quit for main smash\n";
+			return 0;
+		}
 
 		//initialize buffers for next command
 		_line[0] = '\0';

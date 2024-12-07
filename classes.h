@@ -38,9 +38,9 @@ public:
 
     job_arr();
     // int fg_job_insert(char* command);
-	pid_t job_arr::get_FG_pid();							//added by Barak
-	char* job_arr::get_FG_command();						//added by Barak
-	int job_arr::job_FG_remove();							//added by Barak
+	pid_t get_FG_pid();
+	char* get_FG_command();
+	int job_FG_remove();
     int job_insert(int pid, int status, char* command);		//united with fg_job_insert by Barak
     int job_remove(int pid);
     int stat_change(int pid, char stat);
@@ -49,5 +49,5 @@ public:
     int job_2_front(int pid);
 };
 
-job_arr job_list;
+// job_arr job_list;
 #endif

@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <unistd.h>
-#include <string.h>
+#include <cstring>
 
 
 #include "signals.h"
@@ -22,19 +22,19 @@ using std::prev;
 
 const char* commands[9] = {"showpid","pwd","cd","jobs","kill","fg","bg",
 															"quit","diff"};
-
-job_arr job_list;
+extern job_arr job_list;
 //example function for parsing commands
 
 int run_command(int op);
 int identify_cmd(char* cmd);
 int showpid (int numArgs);
 int pwd(int numArgs);
-int cd(int numArgs,char* path [MAX_LINE_SIZE]);
+// int cd(int numArgs,char* path [MAX_LINE_SIZE]);
+int quit(/*char* args[1],*/ int numArgs);
 
-void handleFg2Bg(int sig);
-void handleFg2Bg(int sig);
-void HandleConfigPack(); 	//PUT IN ALL HOMEMADE (LOL) FUNCTIONS
+void func_handleFg2Bg(int sig);
+void func_handleFg2Bg(int sig);
+void func_HandleConfigPack(); 	//PUT IN ALL HOMEMADE (LOL) FUNCTIONS
 
 
 int parseCommand(char* line, char* args[])						//TODO I guess we need masking for both functions
@@ -71,56 +71,62 @@ int parseCommand(char* line, char* args[])						//TODO I guess we need masking f
 // @brief process the given command and run it
 // @param args array, number of args job array
 
-int processReturnValue(char* args[MAX_ARGS], int numArgs/*, job_arr job_array*/)
+int processReturnValue(char* args[MAX_ARGS], int numArgs)
 {
 	int op = identify_cmd(args[0]);
 	
-	if((*args[numArgs] != '%') && (op != -1)){		/*run in fg*/
+	if((*args[numArgs] != '%') && (op != -1))
+	{																		/*homemade function in fg*/
 		job_list.job_insert(1, FG, args[0]);
 		run_command(op,args,numArgs);
 		//TODO consider array update (add "FINISH" state)
 	}
-	else{											/*run in bg*/
-		pid_t pid = fork();
+	else
+	{	
+		char* argv[MAX_ARGS];
+		// Arrange the args in argv[] for execv()
+		for (int i = 0; i < numArgs + 1; i++)
+			strcpy(argv[i], args[i+1]);
+		argv[numArgs + 1] = NULL;
+																
+		pid_t pid = fork();		
 		if(pid < 0)
 		{
 			perror("fork fail");
 			exit(1);
 			//TODO delete job
 		}
-		else if(pid == 0) //child code
+		else if(pid == 0)																/*child code*/
 		{
-			setpgrp();
-			if(op == -1){							//external command
-				execvp(args[0], &args[1]);
+			if((op != -1)){									/*external command*/
+				setpgrp();
+				execvp(args[0], argv);
 				//execvp never returns unless upon error
 				perror("execvp fail");
-				exit(1); //set nonzero exit code for father to read
-				
+				exit(1); 
 			}
-			else run_command(op,args,numArgs);
-			
+			else run_command(op,argv,numArgs);				/*homemade command*/
 		}
-
-		else //father code
-		{
-			//consider masking method
-			job_list.job_insert(pid, BG, args[0]);
-			int status; 
+		else{ 																			/*father code*/
+			if((op != -1) && (*args[numArgs] != '%'))		/*wait for external command in fg*/
+			{
+				job_list.job_insert(pid, FG, args[0]);
+				int exit_state;
+				waitpid(pid, &exit_state, 0); 	
+				if(WIFEXITED(exit_state)) //determines if a child exited with exit()
+				{
+				if(!WEXITSTATUS(exit_state))
+					cout << "error: external command in fg had exit status != 0\n";
+				else
+					cout << "external command in fg finished successfully\n";
+				}
+			}
+			else{											//father of external/homemade command in BG
+				//consider masking method
+				job_list.job_insert(pid, BG, args[0]);
+			}
 			
-			// waitpid(pid, &status, 0); 	//wait for child to finish and read exit code into status
-			// if(WIFEXITED(status)) //WIFEXITED determines if a child exited with exit()
-			// {
-			// 	int exitStatus = WEXITSTATUS(status);
-			// 	if(!exitStatus)
-			// 	{
-			// 		//exit status != 0, handle error	
-			// 	}
-			// 	else
-			// 	{
-			// 		//exit status == 0, handle success
-			// 	}
-			// }
+			
 		}
 	}
 
@@ -148,13 +154,13 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 		// case 4	: kill(arg[1], arg[2]); break;
 		// case 5	: fg(arg[1]); 			break;
 		// case 6	: bg(arg[1]); 			break;
-		// case 7	: quit(); 				break;
+		case 7	: quit(/*args[1],*/ numArgs); 				break;
 		// case 8	: diff(arg[1],arg[2]); 	break;
 	}
 }
 
 int showpid (int numArgs){
-	HandleConfigPack();
+	func_HandleConfigPack();
 	if(numArgs != 0){
 		cout << "error: showpid: expected 0 arguments\n";
 		return 1 ;
@@ -164,7 +170,7 @@ int showpid (int numArgs){
 	return 0 ;
 }
 int pwd(int numArgs){
-	HandleConfigPack();
+	func_HandleConfigPack();
 	if(numArgs != 0){
 		cout <<"error: pwd: expected 0 arguments\n";
 		return 1;
@@ -178,15 +184,32 @@ int pwd(int numArgs){
 	cout << buffer << endl;
 	return 0;
 }
-int cd(int numArgs,char* path [MAX_LINE_SIZE]){
-	HandleConfigPack();
-	if (numArgs!=1){
-		cout <<  "error: cd: expected 1 arguments";
+// int cd(int numArgs,char* path [MAX_LINE_SIZE]){
+// 	func_HandleConfigPack();
+// 	if (numArgs!=1){
+// 		cout <<  "error: cd: expected 1 arguments";
+// 		return 1;
+// 	}
+// 	if(!strcmp(path,"-")){
+// 		if()
+// 	}
+// }
+int quit(/*char* args[1],*/ int numArgs){
+	//TODO think about the case of running in bg
+
+	// if((numArgs == 1) & (args[1] != "kill")){
+	// 	cout << "error: quit: only kill command is possible\n";
+	// 	return 1;
+	// }
+	if(numArgs > 1){
+		cout <<"error: quit: too many arguments\n";
 		return 1;
 	}
-	if(!strcmp(path,"-")){
-		if()
-	}
+	// if((numArgs == 1) & (args[1] == "kill")){
+	// 	//TODO kill all jobs
+	// }
+	cout << "innitalizing shot down\n" ;
+	return 0;
 }
 
 
@@ -194,7 +217,7 @@ int cd(int numArgs,char* path [MAX_LINE_SIZE]){
 * Function handlers
 =============================================================================*/
 //handler for ctrl+c
-void handleFGKill(int sig) {
+void func_handleFGKill(int sig) {
 	// sigset_t maskSet;
 	// sigemptyset(&maskSet);            // Start with an empty set
 	// sigaddset(&maskSet, SIGTERM);
@@ -210,7 +233,7 @@ void handleFGKill(int sig) {
 }
 
 //handler for ctrl+z
-void handleFg2Bg(int sig) {
+void func_handleFg2Bg(int sig) {
 	sigset_t maskSet, oldSet;
 	sigfillset(&maskSet);
 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
@@ -223,9 +246,10 @@ void handleFg2Bg(int sig) {
 		exit(1);
 		//TODO in a perfect world we would also delete the job
 	}
-	else if(pid == 0) 
+	else if(pid == 0){ 
+		cout << "function got ctrl+z to the face\n";
 		raise(SIGSTOP);			//child stops itself
-
+	}
 	else
 	{
 		/*DT maintaince by father*/
@@ -239,12 +263,12 @@ void handleFg2Bg(int sig) {
 }
 
 //@brief: Handlers configuration pack	(TO PUT IN ALL FUNCTIONS)
-void HandleConfigPack(){
-	struct sigaction sb = { sb.sa_handler = &handleFGKill };
+void func_HandleConfigPack(){
+	struct sigaction sb = { sb.sa_handler = &func_handleFGKill };
 	sb.sa_flags = SA_RESTART;
 	sigaction(SIGINT, &sb, nullptr);
 
-	struct sigaction sc = { sc.sa_handler = &handleFg2Bg };
+	struct sigaction sc = { sc.sa_handler = &func_handleFg2Bg };
 	sc.sa_flags = SA_RESTART;
 	sigaction(SIGTSTP, &sc, nullptr);
 }

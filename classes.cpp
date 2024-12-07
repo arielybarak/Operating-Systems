@@ -80,7 +80,7 @@ int job_arr::job_remove(pid_t pid){
 			return 0;
 		}
 	}
-	cout << "fail to remove job\n";
+	cout << "error: job_remove: fail to remove job\n";
 	return 1;
 }
 int job_arr::stat_change(pid_t pid, char stat){
