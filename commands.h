@@ -27,9 +27,6 @@ enum ParsingError
 //  strings
 int parseCommand(char*, char**);
 int processReturnValue(char* args[MAX_ARGS], int numArgs);
-int run_command(int op, char* args[MAX_ARGS], int numArgs);
-int showpid (int numArgs);
-int pwd(int numArgs);
 int quit(/*char args[1],*/ int numArgs);
 // int cd(int numArgs,char* path [MAX_LINE_SIZE]);
 

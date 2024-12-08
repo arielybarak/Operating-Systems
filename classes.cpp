@@ -1,3 +1,6 @@
+/*=============================================================================
+* includes 
+=============================================================================*/
 #include <stdlib.h>
 #include <iostream>
 #include <time.h>
@@ -8,6 +11,9 @@
 #include "signals.h"
 #include "classes.h"
 
+/*=============================================================================
+* using class
+=============================================================================*/
 using std::FILE;
 using std::string;
 using std::cout;
@@ -15,36 +21,43 @@ using std::endl;
 using std::cerr;
 using std::prev;
 
+/*=============================================================================
+* defines class
+=============================================================================*/
 #define FG   '1'
 #define BG 	 '2'
 #define STOPPED '3'
+
+/*=============================================================================
+* job class functions
+=============================================================================*/
+
+job::job(){
+	pid=0;
+	*command='\0';
+	time_stamp=0;
+	status=0;
+	full=0;
+	*prev_wd='\0';
+}
+/*=============================================================================
+* job_arr class functions
+=============================================================================*/
 // @brief job arr constructor
 job_arr :: job_arr(){
 	job_count = 0;
 	free_idx = 1;
 }
-// @brief moves a job from the list to the foreground
-// @param gets the command name
-// int job_arr::fg_job_insert(char* command){
-// 	strcpy(jobs[0].command, command);
-// 	jobs[0].pid=getpid();
-// 	jobs[0].time_stamp = time(NULL);
-// 	return 0;
-// }
-// @brief inserts a job to the background job list
-// @param gets job pid, status(running=2, stopped=3)and the command
-
-pid_t job_arr::get_FG_pid(){
-	return jobs[0].pid;
-}
-
-char* job_arr::get_FG_command(){
-	return jobs[0].command;
-}
-
-int job_arr::job_FG_remove(){
-	jobs[0].full = false;
-	return 0;
+/*	@brief returns the index that contains the process with pid as its pid, 
+	returns -1 if process with pid wasnt found
+  	@param pid of wanted process*/
+int job_arr::get_job_idx(pid_t pid){
+	for(int i=0; i<=MAX_ARGS+1;i++){
+		if((jobs[i].pid==pid)&&(jobs[i].full)){
+			return i;
+		}
+	}
+	return -1;
 }
 
 int job_arr::job_insert(pid_t pid, int status, char* command){
@@ -71,7 +84,14 @@ int job_arr::job_insert(pid_t pid, int status, char* command){
 	}
 	return 0;
 }
-int job_arr::job_remove(pid_t pid){
+
+void job_arr::fg_job_remove(){
+	jobs[0].full= false;
+	jobs[0].prev_wd[0]='\0';
+	return;
+}
+
+int job_arr::job_remove(int pid){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid == pid){
 			free_idx = (free_idx<i) ? free_idx : i;
@@ -80,10 +100,10 @@ int job_arr::job_remove(pid_t pid){
 			return 0;
 		}
 	}
-	cout << "error: job_remove: fail to remove job\n";
+	cout << "fail to remove job\n";
 	return 1;
 }
-int job_arr::stat_change(pid_t pid, char stat){
+int job_arr::stat_change(int pid, char stat){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid == pid){
 			jobs[i].status=stat;
@@ -95,18 +115,21 @@ int job_arr::stat_change(pid_t pid, char stat){
 }
 void job_arr::print(){
 	for(int i=1; i<MAX_ARGS+1; i++){
-		cout << i <<" "<< jobs[i].command << " " << jobs[i].pid << " " << difftime(time(NULL), jobs[i].time_stamp);
-		if(jobs[i].status==STOPPED){
-			cout << "(stopped)";
+		if(jobs[i].full){
+			cout << "[" << i << "] "<< jobs[i].command << ": " << jobs[i].pid <<
+			" " << difftime(time(NULL), jobs[i].time_stamp) << " secs";
+			if(jobs[i].status==STOPPED){
+				cout << " (stopped)";
+			}
+			cout << endl;
 		}
-		cout << endl;
 	}
 }
 void job_arr::print_fg_job(){
 		cout << "print_fg_job: " << jobs[0].command << " " << jobs[0].pid;
 		cout << endl;
 }
-int job_arr::job_2_front(pid_t pid){
+int job_arr::job_2_front(int pid){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid==pid){
 			jobs[0].pid = pid;

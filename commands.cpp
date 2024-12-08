@@ -25,12 +25,8 @@ const char* commands[9] = {"showpid","pwd","cd","jobs","kill","fg","bg",
 extern job_arr job_list;
 //example function for parsing commands
 
-int run_command(int op);
+int run_command(int op, char* args[MAX_ARGS], int numArgs);;
 int identify_cmd(char* cmd);
-int showpid (int numArgs);
-int pwd(int numArgs);
-// int cd(int numArgs,char* path [MAX_LINE_SIZE]);
-int quit(/*char* args[1],*/ int numArgs);
 
 void func_handleFg2Bg(int sig);
 void func_handleFg2Bg(int sig);
@@ -76,7 +72,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 	int op = identify_cmd(args[0]);
 	
 	if((*args[numArgs] != '%') && (op != -1))
-	{																		/*homemade function in fg*/
+	{												/*homemade function in fg*/
 		job_list.job_insert(1, FG, args[0]);
 		run_command(op,args,numArgs);
 		//TODO consider array update (add "FINISH" state)
@@ -85,9 +81,9 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 	{	
 		char* argv[MAX_ARGS];
 		// Arrange the args in argv[] for execv()
-		for (int i = 0; i < numArgs + 1; i++)
-			strcpy(argv[i], args[i+1]);
-		argv[numArgs + 1] = NULL;
+		// for (int i = 0; i < numArgs + 1; i++)
+		// 	strcpy(argv[i], args[i+1]);
+		// argv[numArgs + 1] = NULL;
 																
 		pid_t pid = fork();		
 		if(pid < 0)
@@ -144,37 +140,12 @@ int identify_cmd(char* cmd){
 	return -1 ;
 }
 
-// @brief runs the command identified
-int run_command(int op, char* args[MAX_ARGS], int numArgs){
-	switch (op){
-		case 0	: showpid(numArgs); 		break;
-		case 1	: pwd(numArgs); 			break;
-		// case 2	: cd(arg[1]); 			break;
-		// case 3	: jobs(); 				break;
-		// case 4	: kill(arg[1], arg[2]); break;
-		// case 5	: fg(arg[1]); 			break;
-		// case 6	: bg(arg[1]); 			break;
-		case 7	: quit(/*args[1],*/ numArgs); 				break;
-		// case 8	: diff(arg[1],arg[2]); 	break;
-	}
-}
-
-int showpid (int numArgs){
-	func_HandleConfigPack();
-	if(numArgs != 0){
-		cout << "error: showpid: expected 0 arguments\n";
-		return 1 ;
-	}
+void showpid (){
 	int pid  = getpid();
 	cout << "pid is " << pid << "\n" ;
 	return 0 ;
 }
 int pwd(int numArgs){
-	func_HandleConfigPack();
-	if(numArgs != 0){
-		cout <<"error: pwd: expected 0 arguments\n";
-		return 1;
-	}
 	char buffer[MAX_LINE_SIZE]="/n";
 	getcwd(buffer,MAX_LINE_SIZE);
 	if(buffer==nullptr){
@@ -184,16 +155,52 @@ int pwd(int numArgs){
 	cout << buffer << endl;
 	return 0;
 }
-// int cd(int numArgs,char* path [MAX_LINE_SIZE]){
-// 	func_HandleConfigPack();
-// 	if (numArgs!=1){
-// 		cout <<  "error: cd: expected 1 arguments";
-// 		return 1;
-// 	}
-// 	if(!strcmp(path,"-")){
-// 		if()
-// 	}
-// }
+int cd(int numArgs, char* path){
+	int retval=0;
+	pid_t pid=getpid();
+	int idx=job_list.get_job_idx(pid);
+	bool prev_jump=false;
+	if(idx==-1){
+		cout << "job not found"<< endl;
+		return 1;
+	}
+	char temp [MAX_LINE_SIZE];
+	if(!strcmp(path,"-")){
+		if(job_list.jobs[idx].prev_wd[0]=='\0'){
+			cout << "error: cd: old pwd not set" << endl;
+			return 0;
+		}
+		prev_jump=true;
+		strcpy(temp,job_list.jobs[idx].prev_wd);
+		getcwd(job_list.jobs[idx].prev_wd,MAX_LINE_SIZE);
+		retval = chdir(temp);
+	}
+	if(!prev_jump){
+		getcwd(temp,MAX_LINE_SIZE);
+		retval = chdir(path);
+		if(retval){
+			cout << "error: cd: target directory does not exist" << endl;
+		}
+		else{
+			strcpy(job_list.jobs[idx].prev_wd,temp);
+		}
+	}
+	return retval;
+}
+void jobs(){
+	job_list.print();
+	return 0;
+}
+int kill_func(int signum , pid_t pid){
+	int idx=job_list.get_job_idx(pid);
+	if(pid==-1){
+		cout << "job id " << pid << " does not exist"<< endl;
+		return 1;
+	}
+	kill(signum,pid);
+	cout << "signal " << signum << " was sent to pid " << pid << endl;
+	return 0;
+}
 int quit(/*char* args[1],*/ int numArgs){
 	//TODO think about the case of running in bg
 
@@ -212,6 +219,59 @@ int quit(/*char* args[1],*/ int numArgs){
 	return 0;
 }
 
+// @brief runs the command identified
+int run_command(int op, char* args[MAX_ARGS], int numArgs){
+	switch (op){
+		case 0	: {
+			if(numArgs!=0){
+				cout << "smash error: showpid: expected 0 arguments\n";
+			}
+			showpid(numArgs);
+			return 0;
+			break;
+		}
+		case 1	: {
+			if(numArgs != 0){
+				cout <<"error: pwd: expected 0 arguments\n";
+				return 1;
+			}
+			return pwd(numArgs);
+			break;
+		}
+		case 2	: { 
+			if(numArgs!=1){
+				cout << "smash error: cd: expected 1 arguments";
+				return 1;
+			}
+			return cd(arg[1]);
+			break;
+		}
+		case 3	: {
+			jobs();
+			return 0; 				
+			break;
+		}
+		case 4	: { 
+			if(numArgs!=2){
+				cout << "smash error: kill: invalid arguments\n";
+				return 1;
+			}
+			size_t pos1, pos2;
+			int signum = strtol(args[1],pos1,10);
+			pid_t pid = strtol(args[2],pos2,10);
+			if(pos1<strlen(args[1])||pos2<strlen(args[2])){
+				cout << "smash error: kill: invalid arguments\n";
+				return 1;
+			}
+			kill_func(signum, pid);
+			break;
+		}
+		// case 5	: fg(arg[1]); 			break;
+		// case 6	: bg(arg[1]); 			break;
+		case 7	: quit(/*args[1],*/ numArgs); 				break;
+		// case 8	: diff(arg[1],arg[2]); 	break;
+	}
+}
 
 /*=============================================================================
 * Function handlers
