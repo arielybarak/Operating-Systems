@@ -18,4 +18,4 @@ classes.o: classes.cpp classes.h
 	$(CXX) $(CXXFLAGS) -c classes.cpp
 # Cleaning old files before new make
 clean:
-	$(RM) smash $(OBJS) *.o *~ "#"* core.*
+	$(RM) $(OBJS) *.o *~ "#"* core.*

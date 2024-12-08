@@ -54,6 +54,7 @@ job_arr :: job_arr(){
 int job_arr::get_job_idx(pid_t pid){
 	for(int i=0; i<=MAX_ARGS+1;i++){
 		if((jobs[i].pid==pid)&&(jobs[i].full)){
+			cout << "this is " << i <<endl;
 			return i;
 		}
 	}

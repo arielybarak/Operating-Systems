@@ -143,9 +143,9 @@ int identify_cmd(char* cmd){
 void showpid (){
 	int pid  = getpid();
 	cout << "pid is " << pid << "\n" ;
-	return 0 ;
+	return;
 }
-int pwd(int numArgs){
+int pwd(){
 	char buffer[MAX_LINE_SIZE]="/n";
 	getcwd(buffer,MAX_LINE_SIZE);
 	if(buffer==nullptr){
@@ -155,7 +155,7 @@ int pwd(int numArgs){
 	cout << buffer << endl;
 	return 0;
 }
-int cd(int numArgs, char* path){
+int cd(char* path){
 	int retval=0;
 	pid_t pid=getpid();
 	int idx=job_list.get_job_idx(pid);
@@ -189,11 +189,11 @@ int cd(int numArgs, char* path){
 }
 void jobs(){
 	job_list.print();
-	return 0;
+	return;
 }
 int kill_func(int signum , pid_t pid){
 	int idx=job_list.get_job_idx(pid);
-	if(pid==-1){
+	if(idx==-1){
 		cout << "job id " << pid << " does not exist"<< endl;
 		return 1;
 	}
@@ -226,7 +226,7 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			if(numArgs!=0){
 				cout << "smash error: showpid: expected 0 arguments\n";
 			}
-			showpid(numArgs);
+			showpid();
 			return 0;
 			break;
 		}
@@ -235,7 +235,7 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 				cout <<"error: pwd: expected 0 arguments\n";
 				return 1;
 			}
-			return pwd(numArgs);
+			return pwd();
 			break;
 		}
 		case 2	: { 
@@ -243,7 +243,7 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 				cout << "smash error: cd: expected 1 arguments";
 				return 1;
 			}
-			return cd(arg[1]);
+			return cd(args[1]);
 			break;
 		}
 		case 3	: {
@@ -251,19 +251,31 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			return 0; 				
 			break;
 		}
-		case 4	: { 
-			if(numArgs!=2){
+		case 4: { 
+    		if (numArgs != 2) {
+        		cout << "smash error: kill: invalid arguments\n";
+        		return 1;
+    		}
+    		char* endptr1;
+    		char* endptr2;
+    		// Convert the first argument (signal number) to an integer
+    		int signum = strtol(args[1], &endptr1, 10);
+			if (*endptr1 != '\0') {
+				// If the conversion did not consume the entire string, it's not a valid number
 				cout << "smash error: kill: invalid arguments\n";
 				return 1;
 			}
-			size_t pos1, pos2;
-			int signum = strtol(args[1],pos1,10);
-			pid_t pid = strtol(args[2],pos2,10);
-			if(pos1<strlen(args[1])||pos2<strlen(args[2])){
+
+			// Convert the second argument (PID) to a process ID
+			pid_t pid = strtol(args[2], &endptr2, 10);
+			if (*endptr2 != '\0') {
+				// If the conversion did not consume the entire string, it's not a valid number
 				cout << "smash error: kill: invalid arguments\n";
 				return 1;
 			}
-			kill_func(signum, pid);
+
+			// If both arguments are valid, call kill_func
+			return kill_func(signum, pid);
 			break;
 		}
 		// case 5	: fg(arg[1]); 			break;
@@ -277,61 +289,61 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 * Function handlers
 =============================================================================*/
 //handler for ctrl+c
-void func_handleFGKill(int sig) {
-	// sigset_t maskSet;
-	// sigemptyset(&maskSet);            // Start with an empty set
-	// sigaddset(&maskSet, SIGTERM);
-	sigset_t maskSet, oldSet;
-	sigfillset(&maskSet);
-	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
+// void func_handleFGKill(int sig) {
+// 	// sigset_t maskSet;
+// 	// sigemptyset(&maskSet);            // Start with an empty set
+// 	// sigaddset(&maskSet, SIGTERM);
+// 	sigset_t maskSet, oldSet;
+// 	sigfillset(&maskSet);
+// 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
-	job_list.job_FG_remove();
-	cout << "process " << job_list.get_FG_pid() << " was killed\n";
+// 	job_list.job_FG_remove();
+// 	cout << "process " << job_list.get_FG_pid() << " was killed\n";
 
-	sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
-	return;
-}
+// 	sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
+// 	return;
+// }
 
-//handler for ctrl+z
-void func_handleFg2Bg(int sig) {
-	sigset_t maskSet, oldSet;
-	sigfillset(&maskSet);
-	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
+// //handler for ctrl+z
+// void func_handleFg2Bg(int sig) {
+// 	sigset_t maskSet, oldSet;
+// 	sigfillset(&maskSet);
+// 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
-	pid_t pid = fork();
-	if(pid < 0)
-	{
-		perror("fork fail");
-		sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
-		exit(1);
-		//TODO in a perfect world we would also delete the job
-	}
-	else if(pid == 0){ 
-		cout << "function got ctrl+z to the face\n";
-		raise(SIGSTOP);			//child stops itself
-	}
-	else
-	{
-		/*DT maintaince by father*/
-		job_list.job_insert(pid, STOPPED, job_list.get_FG_command());
-		job_list.job_FG_remove();
+// 	pid_t pid = fork();
+// 	if(pid < 0)
+// 	{
+// 		perror("fork fail");
+// 		sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
+// 		exit(1);
+// 		//TODO in a perfect world we would also delete the job
+// 	}
+// 	else if(pid == 0){ 
+// 		cout << "function got ctrl+z to the face\n";
+// 		raise(SIGSTOP);			//child stops itself
+// 	}
+// 	else
+// 	{
+// 		/*DT maintaince by father*/
+// 		job_list.job_insert(pid, STOPPED, job_list.get_FG_command());
+// 		job_list.job_FG_remove();
 
-		cout << "process " << job_list.get_FG_pid() << " was stopped\n";
-		sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
-		return;
-	}
-}
+// 		cout << "process " << job_list.get_FG_pid() << " was stopped\n";
+// 		sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
+// 		return;
+// 	}
+// }
 
-//@brief: Handlers configuration pack	(TO PUT IN ALL FUNCTIONS)
-void func_HandleConfigPack(){
-	struct sigaction sb = { sb.sa_handler = &func_handleFGKill };
-	sb.sa_flags = SA_RESTART;
-	sigaction(SIGINT, &sb, nullptr);
+// //@brief: Handlers configuration pack	(TO PUT IN ALL FUNCTIONS)
+// void func_HandleConfigPack(){
+// 	struct sigaction sb = { sb.sa_handler = &func_handleFGKill };
+// 	sb.sa_flags = SA_RESTART;
+// 	sigaction(SIGINT, &sb, nullptr);
 
-	struct sigaction sc = { sc.sa_handler = &func_handleFg2Bg };
-	sc.sa_flags = SA_RESTART;
-	sigaction(SIGTSTP, &sc, nullptr);
-}
+// 	struct sigaction sc = { sc.sa_handler = &func_handleFg2Bg };
+// 	sc.sa_flags = SA_RESTART;
+// 	sigaction(SIGTSTP, &sc, nullptr);
+// }
 
 
 	
