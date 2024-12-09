@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
 
 	while(1)
 	{
-		jobs_update();
+		//jobs_update();
 		char* args[MAX_ARGS];
 		printf("smash > ");
 		fgets(_line, MAX_LINE_SIZE, stdin);
@@ -59,11 +59,6 @@ int main(int argc, char* argv[])
 		//execute command
 		int numArgs = parseCommand(_cmd,args);
 		int ret_val=processReturnValue(args,numArgs);
-		if(!strcmp("quit", args[0])){
-			cout << "quit for main smash\n";
-			return 0;
-		}
-
 		//initialize buffers for next command
 		_line[0] = '\0';
 		_cmd[0] = '\0';

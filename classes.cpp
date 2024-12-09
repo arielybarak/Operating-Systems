@@ -55,7 +55,6 @@ job_arr :: job_arr(){
 int job_arr::get_job_idx(pid_t pid){
 	for(int i=0; i<=MAX_ARGS+1;i++){
 		if((jobs[i].pid==pid)&&(jobs[i].full)){
-			cout << "this is " << i <<endl;
 			return i;
 		}
 	}
@@ -67,15 +66,15 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
-	cout << "insert: pid = " << pid << " status = ";
-	(status==FG) ? cout << "FG" : (status==BG) ? cout << "BG": cout<< "STOPPED";
-	cout << " is external = " << is_external;// << "\n";
+	//cout << "insert: pid = " << pid << " status = ";
+	//(status==FG) ? cout << "FG" : (status==BG) ? cout << "BG": cout<< "STOPPED";
+	//cout << " is external = " << is_external;// << "\n";
 	if(status == FG){
 		strcpy(jobs[0].command, command);
 		jobs[0].pid=pid;
 		jobs[0].full = true;
 		jobs[0].is_external = is_external;
-		cout << " in slot 0\n";
+		//cout << " in slot 0\n";
 		return 0;
 	}
 	cout << " in slot " << free_idx << "\n";

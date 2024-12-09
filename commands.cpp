@@ -31,12 +31,7 @@ extern job_arr job_list;
 int run_command(int op, char* args[MAX_ARGS], int numArgs);;
 int identify_cmd(char* cmd);
 
-void func_handleFg2Bg(int sig);
-void func_handleFg2Bg(int sig);
-void func_HandleConfigPack(); 	//PUT IN ALL HOMEMADE (LOL) FUNCTIONS
-
-
-int parseCommand(char* line, char* args[])						//TODO I guess we need masking for both functions
+int parseCommand(char* line, char* args[])
 {
 	char delimiters[]=" \t\n";//parsing should be done by spaces, tabs or newlines
 	int numArgs = 0;
@@ -218,32 +213,47 @@ void jobs(){
 	job_list.print();
 	return;
 }
-int kill_func(int signum , pid_t pid){
-	int idx=job_list.get_job_idx(pid);
-	if(idx==-1){
-		cout << "job id " << pid << " does not exist"<< endl;
+int kill_func(int signum , int job_id){
+	if(!job_list.jobs[job_id].full){
+		cout << "job id " << job_id << " does not exist"<< endl;
 		return 1;
 	}
-	kill(signum,pid);
-	cout << "signal " << signum << " was sent to pid " << pid << endl;
+	kill(job_list.jobs[job_id].pid,signum);
+	cout << "signal " << signum << " was sent to pid " << 
+									job_list.jobs[job_id].pid << endl;
 	return 0;
 }
-int quit(/*char* args[1],*/ int numArgs){
-	//TODO think about the case of running in bg
+int quit(int numArgs, char* arg_1){
 
-	// if((numArgs == 1) & (args[1] != "kill")){
-	// 	cout << "error: quit: only kill command is possible\n";
-	// 	return 1;
-	// }
-	if(numArgs > 1){
-		cout <<"error: quit: too many arguments\n";
-		return 1;
+	if((numArgs == 1) && (!strcmp(arg_1,"kill"))){
+	 	//TODO kill all jobs
+		for(int i=1;i<MAX_ARGS+1;i++){
+			if(job_list.jobs[i].full){
+				bool terminated = false;
+				cout << "["<<i<<"]" << job_list.jobs[i].command << " - " <<endl;
+				kill(job_list.jobs[i].pid ,SIGTERM);
+				cout << "sending SIGTERM... ";
+				for (int i=0; i<5;i++){
+					int status;
+					pid_t result=waitpid(job_list.jobs[i].pid,&status,WNOHANG);
+					if(result==-1){
+						return-1;
+					}
+					if(WIFEXITED(status) || WIFSIGNALED(status)){
+						cout<<"done"<<endl;
+						terminated=true;
+						break;
+					}
+					sleep(1);
+				}
+				if(!terminated){
+					cout << "sending SIGKILL... done"<<endl;
+					kill(job_list.jobs[i].pid, SIGKILL);
+				}
+			}
+		}
 	}
-	// if((numArgs == 1) & (args[1] == "kill")){
-	// 	//TODO kill all jobs
-	// }
-	cout << "innitalizing shot down\n" ;
-	return 0;
+	exit(0);
 }
 
 // @brief runs the command identified
@@ -286,28 +296,27 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
     		char* endptr1;
     		char* endptr2;
     		// Convert the first argument (signal number) to an integer
-    		int signum = strtol(args[1], &endptr1, 10);
-			if (*endptr1 != '\0') {
-				// If the conversion did not consume the entire string, it's not a valid number
-				cout << "smash error: kill: invalid arguments\n";
-				return 1;
-			}
-
+    		int signum = strtol(args[1]+1, &endptr1, 10);
 			// Convert the second argument (PID) to a process ID
-			pid_t pid = strtol(args[2], &endptr2, 10);
-			if (*endptr2 != '\0') {
-				// If the conversion did not consume the entire string, it's not a valid number
+			int job_id = strtol(args[2], &endptr2, 10);
+			if (*endptr1 != '\0' || *endptr2 != '\0' || job_id<1||100<job_id||*args[1]!='-'||signum<1||signum>22) {
 				cout << "smash error: kill: invalid arguments\n";
 				return 1;
 			}
-
 			// If both arguments are valid, call kill_func
-			return kill_func(signum, pid);
+			return kill_func(signum, job_id);
 			break;
 		}
 		// case 5	: fg(arg[1]); 			break;
 		// case 6	: bg(arg[1]); 			break;
-		case 7	: quit(/*args[1],*/ numArgs); 				break;
+		case 7	: {
+			if(1<numArgs){
+				cout << "smash error: quit: unexpected arguments" <<endl;
+				return 1;
+			}
+			quit(numArgs,args[1]);
+			break;
+		}
 		// case 8	: diff(arg[1],arg[2]); 	break;
 	}
 }
