@@ -10,6 +10,7 @@
 #include "commands.h"
 #include "signals.h"
 #include "classes.h"
+#include <sys/wait.h>
 
 /*=============================================================================
 * using class
@@ -66,13 +67,19 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
+	cout << "insert: pid = " << pid << " status = ";
+	(status==FG) ? cout << "FG" : (status==BG) ? cout << "BG": cout<< "STOPPED";
+	cout << " is external = " << is_external;// << "\n";
 	if(status == FG){
 		strcpy(jobs[0].command, command);
 		jobs[0].pid=pid;
 		jobs[0].full = true;
 		jobs[0].is_external = is_external;
+		cout << " in slot 0\n";
 		return 0;
 	}
+	cout << " in slot " << free_idx << "\n";
+	jobs[free_idx].full = true;
 	jobs[free_idx].pid = pid;
 	jobs[free_idx].status = status;
 	jobs[free_idx].is_external = is_external;
@@ -94,25 +101,47 @@ void job_arr::fg_job_remove(){
 	return;
 }
 
-int job_arr::job_remove(int pid){
-	for(int i=1; i<MAX_ARGS+1; i++){
+int job_arr::job_remove(pid_t pid, int status){
+	
+	if(pid == 0)
+		return 0;
+	
+	for(int i=1; i<MAX_ARGS+1; i++){							/*processes in BG*/
 		if(jobs[i].pid == pid){
-			free_idx = (free_idx<i) ? free_idx : i;
-			job_count--;
-			jobs[i].full = false;
-			cout << "job_remove: just perfect\n";
-			return 0;
+			cout << "remove: pid = " << pid << " is external = " << jobs[i].is_external << "jobs[0].full="<<jobs[0].full<<"\n";
+			if(WIFEXITED(status)){								//if a proc exited
+				free_idx = (free_idx<i) ? free_idx : i;
+				job_count--;
+				jobs[i].full = false;
+				cout << "job_remove: just perfect\n";
+				return 0;
+			}
+			else if(WIFSTOPPED(status)){						//if a proc stopped
+				jobs[i].status = STOPPED;
+				return 0;
+			}
+			else if(WIFCONTINUED(status)){						//if a proc continued
+				jobs[i].status = BG;
+				return 0;
+			}
 		}
 	}
-	if((jobs[0].full = true) && (jobs[0].pid == pid)){
+	cout << "jobs[0].pid = " << jobs[0].pid << " and jobs[0].full = " << jobs[0].full << "\n";
+	if((jobs[0].full == true) && (jobs[0].pid == pid)){			/*processes in FG*/
+		cout << "remove: pid = " << pid << " is external = " << jobs[0].is_external << "\n";
 		jobs[0].full = false;
+
+		if(WIFSTOPPED(status)){							//if a proc stopped
+			jobs[0].status = STOPPED;
+			return 2;
+		}
 		cout << "FG job_remove: just perfect\n";
-		return 0;
+			return 0;
 	}
-	cout << "jobs[0].pid = " << jobs[0].pid << ", full == " << jobs[0].full << "external == "<< jobs[0].is_external;
 	cout << "\njob_remove: fail\n";
 	return 1;
 }
+
 int job_arr::stat_change(int pid, char stat){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid == pid){

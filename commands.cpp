@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <cstring>
 
-
 #include "signals.h"
 #include "commands.h"
 #include "classes.h"
@@ -19,6 +18,10 @@ using std::cout;
 using std::endl;
 using std::cerr;
 using std::prev;
+
+#define FG   '1'
+#define BG 	 '2'
+#define STOPPED '3'
 
 const char* commands[9] = {"showpid","pwd","cd","jobs","kill","fg","bg",
 															"quit","diff"};
@@ -77,7 +80,6 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 		// cout << "test: here is homemade in FG\n";
 		job_list.job_insert(-1, FG, args[0],false);
 		run_command(op,args,numArgs);
-		//TODO consider array update (add "FINISH" state)
 	}
 	else
 	{	
@@ -85,6 +87,13 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			numArgs--;
 		//no use of argv
 		args[numArgs+1] = NULL;	//for execvp
+		if((status == FG) && (op == -1)){
+		char temp[256];  // Ensure this buffer is large enough
+			strcpy(temp, "/usr/bin/");
+			strcat(temp, args[0]);
+			args[0] = strdup(temp);  // Duplicate and assign back to args[0]
+			cout << "args[0] is " << args[0] ;
+		}
 
 		pid_t pid = fork();		
 		if(pid < 0)
@@ -96,7 +105,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 		else if(pid == 0)																/*child code*/
 		{
 			if(op == -1){									/*external command*/
-				// cout << "test(son): here is external\n";
+				cout << "(son): here is external\n";
 				setpgrp();
 				execvp(args[0], args);
 				//execvp never returns unless upon error
@@ -105,38 +114,32 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			}
 			else{
 				run_command(op,args,numArgs);				/*homemade command*/
-				// cout << "test(son): here is homemade in bg\n";
+				cout << "(son): here is homemade in bg\n";
 				// cout << "smash > ";
 				exit(0);
 			}
 		}
 		else{ 																			/*father code*/
 			job_list.job_insert(pid, status, args[0], (op == -1));
-
 			if((op == -1) && (status == FG))		/*father wait for external command in fg*/
 			{
-				// cout << "test(father): external in FG\n";
-				siginfo_t  exit_state;
-				if (waitid(P_PID, pid, &exit_state, WSTOPPED) == 0) {
-            // Check if the child has terminated or stopped
-            if (exit_state.si_code == CLD_EXITED) {
-                printf("Child process %d terminated normally\n", exit_state.si_pid);
-                printf("Exit status: %d\n", exit_state.si_status);
-            } else if (exit_state.si_code == CLD_STOPPED) {
-                printf("Child process %d was stopped\n", exit_state.si_pid);
-            }
-        } else {
-            perror("Error waiting for child process");
-        }
-				// 	if(WIFEXITED(exit_state)) //determines if a child exited with exit()
-				// 	{
-				// 		if(!WEXITSTATUS(exit_state))
-				// 			cout << "(father) error: external command in fg had exit status != 0\nsmash > ";
-				// 		else
-				// 			cout << "(father) external command in fg finished successfully\n";
-				// 	}
-				// } else 
-        		// 	perror("Error observing process");
+				cout << "(father): external in FG\n";
+				int exit_state;
+				if (waitpid(pid, &exit_state, WUNTRACED) == -1)			//error: doesnt return correctly (external in FG)
+				{
+					std::perror("smash error: waitpid failed");
+					return 1;
+				}	
+				cout << "exit_state: " << exit_state << endl;
+				cout << "WEXITSTATUS(exit_state): " << WEXITSTATUS(exit_state) << endl;
+
+				if(WIFEXITED(exit_state)) //determines if a child exited with exit()
+				{
+				if(WEXITSTATUS(exit_state)==0)
+					cout << "error: external command in fg had exit status != 0\n";
+				else
+					cout << "external command in fg finished successfully\n";
+				}
     
 			}
 			else{											//father of external/homemade command in BG
@@ -309,65 +312,27 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 	}
 }
 
-/*=============================================================================
-* Function handlers
-=============================================================================*/
-//handler for ctrl+c
-// void func_handleFGKill(int sig) {
-// 	// sigset_t maskSet;
-// 	// sigemptyset(&maskSet);            // Start with an empty set
-// 	// sigaddset(&maskSet, SIGTERM);
-// 	sigset_t maskSet, oldSet;
-// 	sigfillset(&maskSet);
-// 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
+//cout << "pid: " << job_list.jobs[i].pid << "external: "<< job_list.jobs[i].is_external << " finnished\n";
+int jobs_update(){
+	int status;									
+    pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED); 
+	// if (pid == -1){ 
+	// 		std::perror("smash error: waitpid failed");
+	// 		return 1;
+	// }
+	if(WIFEXITED(status))							//WIFEXITED determines if a child exited with exit()
+		cout << "child " << pid << " exited with exit()\n";
+	
 
-// 	job_list.job_FG_remove();
-// 	cout << "process " << job_list.get_FG_pid() << " was killed\n";
+	int result = job_list.job_remove(pid, status);
 
-// 	sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
-// 	return;
-// }
+	if(result==2)
+		job_list.job_insert(pid, STOPPED, job_list.jobs[0].command, true);
 
-// //handler for ctrl+z
-// void func_handleFg2Bg(int sig) {
-// 	sigset_t maskSet, oldSet;
-// 	sigfillset(&maskSet);
-// 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
+	return result;
+}
 
-// 	pid_t pid = fork();
-// 	if(pid < 0)
-// 	{
-// 		perror("fork fail");
-// 		sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
-// 		exit(1);
-// 		//TODO in a perfect world we would also delete the job
-// 	}
-// 	else if(pid == 0){ 
-// 		cout << "function got ctrl+z to the face\n";
-// 		raise(SIGSTOP);			//child stops itself
-// 	}
-// 	else
-// 	{
-// 		/*DT maintaince by father*/
-// 		job_list.job_insert(pid, STOPPED, job_list.get_FG_command());
-// 		job_list.job_FG_remove();
 
-// 		cout << "process " << job_list.get_FG_pid() << " was stopped\n";
-// 		sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
-// 		return;
-// 	}
-// }
-
-// //@brief: Handlers configuration pack	(TO PUT IN ALL FUNCTIONS)
-// void func_HandleConfigPack(){
-// 	struct sigaction sb = { sb.sa_handler = &func_handleFGKill };
-// 	sb.sa_flags = SA_RESTART;
-// 	sigaction(SIGINT, &sb, nullptr);
-
-// 	struct sigaction sc = { sc.sa_handler = &func_handleFg2Bg };
-// 	sc.sa_flags = SA_RESTART;
-// 	sigaction(SIGTSTP, &sc, nullptr);
-// }
 
 
 	

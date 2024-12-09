@@ -28,6 +28,7 @@ enum ParsingError
 int parseCommand(char*, char**);
 int processReturnValue(char* args[MAX_ARGS], int numArgs);
 int quit(/*char args[1],*/ int numArgs);
+int jobs_update();
 // int cd(int numArgs,char* path [MAX_LINE_SIZE]);
 
 #endif //__COMMANDS_H__

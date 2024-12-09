@@ -8,7 +8,7 @@
 /*=============================================================================
 * global functions
 =============================================================================*/
-void handleFinishChld(int sig);
+// void handleFinishChld(int sig);
 void handle_ctrl_c(int sig);
 void handle_ctrl_z(int sig);
 void MainHandleConfigPack();

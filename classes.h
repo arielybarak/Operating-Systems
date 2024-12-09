@@ -49,7 +49,7 @@ public:
 	//---------list handeling---------------------------
 	int job_insert(pid_t pid, int status, char* command, bool is_external);
 	void fg_job_remove();
-    int job_remove(int pid);
+    int job_remove(pid_t pid,int status);
 	int job_2_front(int pid);
 	// -------------------------------------------------
 };

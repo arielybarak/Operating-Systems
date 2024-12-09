@@ -47,9 +47,10 @@ int main(int argc, char* argv[])
 {
 	MainHandleConfigPack();	
 	char _cmd[MAX_LINE_SIZE];
-	
+
 	while(1)
 	{
+		jobs_update();
 		char* args[MAX_ARGS];
 		printf("smash > ");
 		fgets(_line, MAX_LINE_SIZE, stdin);
