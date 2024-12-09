@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <cstring>
+#include <fcntl.h>
 
 #include "signals.h"
 #include "commands.h"
@@ -79,6 +80,9 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 	else
 	{	
 		if(*args[numArgs] == '%')
+		/* @todo need to add exception for trying to run fg in bg using '%', fg cant run in bg.
+		added the relevant error line fo that:
+		cout << "smash error: fg: cannot run in background" << endl;*/
 			numArgs--;
 		//no use of argv
 		args[numArgs+1] = NULL;	//for execvp
@@ -121,6 +125,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 				cout << "(father): external in FG\n";
 				int exit_state;
 				if (waitpid(pid, &exit_state, WUNTRACED) == -1)			//error: doesnt return correctly (external in FG)
+				// @todo add job_remove
 				{
 					std::perror("smash error: waitpid failed");
 					return 1;
@@ -223,6 +228,25 @@ int kill_func(int signum , int job_id){
 									job_list.jobs[job_id].pid << endl;
 	return 0;
 }
+// int fg(char* job_id_str, int numArgs){
+// 	if(numArgs==1){
+// 		char* endptr;
+// 		int job_id = strtol(job_id_str, &endptr, 10);
+// 		if (*endptr != '\0' || job_id<1||100<job_id){
+// 			cout << "smash error: fg: invalid arguments" <<endl;
+// 			return 1;
+// 		}
+// 		if(!job_list.jobs[job_id].full){
+// 			cout << "smash error: fg: job id"<< job_id << "does not exist" <<endl;
+// 			return 1;
+// 		}
+// 		pid_t job_pid=job_list.jobs[job_id].pid;
+// 		job_list.job_2_front(job_pid);
+// 		int status;
+// 		pid_t pid = waitpid(pid,&status,NULL);
+
+// 	}
+// }
 int quit(int numArgs, char* arg_1){
 
 	if((numArgs == 1) && (!strcmp(arg_1,"kill"))){
@@ -254,6 +278,85 @@ int quit(int numArgs, char* arg_1){
 		}
 	}
 	exit(0);
+}
+int diff(char* path1, char* path2){
+	
+	int f1;
+	int f2;
+	int ret_val1;
+	int ret_val2;
+	char c1;
+	char c2;
+
+	f1 = (path1, O_RDONLY);
+	if ( f1 == -1 ){
+		perror("smash error: open failed");
+		return 1;
+	}
+	f2 = open(path2, O_RDONLY);
+	if ( f2 == -1 ){
+		perror("smash error: open failed");
+		if ( close(f1) == -1) {
+			perror("smash error: close failed");
+		}
+		return 1;
+	}
+	while (1){
+		ret_val1 = read(f1, &c1, 1); // read one char from f1
+		if (ret_val1 == -1){
+			perror("smash error: read failed");
+			if ( close(f1) == -1) {
+				perror("smash error: close failed");
+			}
+			if ( close(f2) == -1) {
+				perror("smash error: close failed");
+			}
+			return 1;
+		}
+		ret_val2 = read(f2, &c2, 1); // read one char from f2
+
+		if ( ret_val2 == -1 ){
+			perror("smash error: read failed");
+			if ( close(f1) == -1) {
+				perror("smash error: close failed");
+			}
+			if ( close(f2) == -1) {
+				perror("smash error: close failed");
+			}
+			return 1;
+		}
+
+		if( c1 != c2 ) { // found a char not matching
+			break;
+		}
+
+		if ( (ret_val1 == 0) || (ret_val2 == 0) ){
+			break;
+		}
+	} // end of while
+
+	if ( c1 == c2 ){ // files match
+		cout<<"0"<<endl;
+	}
+
+	else { // file don't match
+		cout<<"1"<<endl;
+	}
+
+	// closing files
+	if ( close(f1) == -1 ) {
+		perror("smash error: close failed");
+		if ( close(f2) == -1) {
+			perror("smash error: close failed");
+		}
+		return 1;
+	}
+	if ( close(f2) == -1) {
+		perror("smash error: fclose failed");
+		return 1;
+	}
+	return 0;
+
 }
 
 // @brief runs the command identified
@@ -288,7 +391,7 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			return 0; 				
 			break;
 		}
-		case 4: { 
+		case 4	: { 
     		if (numArgs != 2) {
         		cout << "smash error: kill: invalid arguments\n";
         		return 1;
@@ -307,17 +410,31 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			return kill_func(signum, job_id);
 			break;
 		}
-		// case 5	: fg(arg[1]); 			break;
-		// case 6	: bg(arg[1]); 			break;
-		case 7	: {
-			if(1<numArgs){
-				cout << "smash error: quit: unexpected arguments" <<endl;
+		// case 5	: {
+		// 	if(numArgs>1){
+		// 		cout << "smash error: fg: invalid arguments" <<endl;
+		// 		return 1;
+		// 	}
+		// 	return fg(args[0],numArgs);
+		// 	break;
+		// }
+		// // case 6	: bg(arg[1]); 			break;
+		// case 7	: {
+		// 	if(1<numArgs){
+		// 		cout << "smash error: quit: unexpected arguments" <<endl;
+		// 		return 1;
+		// 	}
+		// 	quit(numArgs,args[1]);
+		// 	break;
+		// }
+		case 8	: {
+			if(numArgs!=2){
+				cout << "smash error: diff: invalid arguments" << endl;
 				return 1;
 			}
-			quit(numArgs,args[1]);
+			diff(args[1],args[2]);
 			break;
 		}
-		// case 8	: diff(arg[1],arg[2]); 	break;
 	}
 }
 
