@@ -47,7 +47,7 @@ public:
     void print();
 	void print_fg_job();
 	//---------list handeling---------------------------
-	int job_insert(pid_t pid, int status, char* command);
+	int job_insert(pid_t pid, int status, char* command, bool is_external);
 	void fg_job_remove();
     int job_remove(int pid);
 	int job_2_front(int pid);

@@ -61,19 +61,21 @@ int job_arr::get_job_idx(pid_t pid){
 	return -1;
 }
 
-int job_arr::job_insert(pid_t pid, int status, char* command){
+int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 	if(job_count >= 100){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
 	if(status == FG){
 		strcpy(jobs[0].command, command);
-		jobs[0].pid=getpid();
+		jobs[0].pid=pid;
 		jobs[0].full = true;
+		jobs[0].is_external = is_external;
 		return 0;
 	}
 	jobs[free_idx].pid = pid;
 	jobs[free_idx].status = status;
+	jobs[free_idx].is_external = is_external;
 	strcpy(jobs[free_idx].command, command);
 	jobs[free_idx].time_stamp = time(NULL);
 	job_count++;
@@ -98,10 +100,17 @@ int job_arr::job_remove(int pid){
 			free_idx = (free_idx<i) ? free_idx : i;
 			job_count--;
 			jobs[i].full = false;
+			cout << "job_remove: just perfect\n";
 			return 0;
 		}
 	}
-	cout << "fail to remove job\n";
+	if((jobs[0].full = true) && (jobs[0].pid == pid)){
+		jobs[0].full = false;
+		cout << "FG job_remove: just perfect\n";
+		return 0;
+	}
+	cout << "jobs[0].pid = " << jobs[0].pid << ", full == " << jobs[0].full << "external == "<< jobs[0].is_external;
+	cout << "\njob_remove: fail\n";
 	return 1;
 }
 int job_arr::stat_change(int pid, char stat){

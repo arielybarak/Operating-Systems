@@ -70,21 +70,22 @@ int parseCommand(char* line, char* args[])						//TODO I guess we need masking f
 int processReturnValue(char* args[MAX_ARGS], int numArgs)
 {
 	int op = identify_cmd(args[0]);
-	
-	if((*args[numArgs] != '%') && (op != -1))
+	char status;
+	status = (*args[numArgs] == '%') ? BG : FG;
+	if((status == FG) && (op != -1))
 	{												/*homemade function in fg*/
-		job_list.job_insert(1, FG, args[0]);
+		// cout << "test: here is homemade in FG\n";
+		job_list.job_insert(-1, FG, args[0],false);
 		run_command(op,args,numArgs);
 		//TODO consider array update (add "FINISH" state)
 	}
 	else
 	{	
-		char* argv[MAX_ARGS];
-		// Arrange the args in argv[] for execv()
-		// for (int i = 0; i < numArgs + 1; i++)
-		// 	strcpy(argv[i], args[i+1]);
-		// argv[numArgs + 1] = NULL;
-																
+		if(*args[numArgs] == '%')
+			numArgs--;
+		//no use of argv
+		args[numArgs+1] = NULL;	//for execvp
+
 		pid_t pid = fork();		
 		if(pid < 0)
 		{
@@ -94,32 +95,55 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 		}
 		else if(pid == 0)																/*child code*/
 		{
-			if((op != -1)){									/*external command*/
+			if(op == -1){									/*external command*/
+				// cout << "test(son): here is external\n";
 				setpgrp();
-				execvp(args[0], argv);
+				execvp(args[0], args);
 				//execvp never returns unless upon error
-				perror("execvp fail");
+				perror("(son) execvp sadly fail");
 				exit(1); 
 			}
-			else run_command(op,argv,numArgs);				/*homemade command*/
+			else{
+				run_command(op,args,numArgs);				/*homemade command*/
+				// cout << "test(son): here is homemade in bg\n";
+				// cout << "smash > ";
+				exit(0);
+			}
 		}
 		else{ 																			/*father code*/
-			if((op != -1) && (*args[numArgs] != '%'))		/*wait for external command in fg*/
+			job_list.job_insert(pid, status, args[0], (op == -1));
+
+			if((op == -1) && (status == FG))		/*father wait for external command in fg*/
 			{
-				job_list.job_insert(pid, FG, args[0]);
-				int exit_state;
-				waitpid(pid, &exit_state, 0); 	
-				if(WIFEXITED(exit_state)) //determines if a child exited with exit()
-				{
-				if(!WEXITSTATUS(exit_state))
-					cout << "error: external command in fg had exit status != 0\n";
-				else
-					cout << "external command in fg finished successfully\n";
-				}
+				// cout << "test(father): external in FG\n";
+				siginfo_t  exit_state;
+				if (waitid(P_PID, pid, &exit_state, WSTOPPED) == 0) {
+            // Check if the child has terminated or stopped
+            if (exit_state.si_code == CLD_EXITED) {
+                printf("Child process %d terminated normally\n", exit_state.si_pid);
+                printf("Exit status: %d\n", exit_state.si_status);
+            } else if (exit_state.si_code == CLD_STOPPED) {
+                printf("Child process %d was stopped\n", exit_state.si_pid);
+            }
+        } else {
+            perror("Error waiting for child process");
+        }
+				// 	if(WIFEXITED(exit_state)) //determines if a child exited with exit()
+				// 	{
+				// 		if(!WEXITSTATUS(exit_state))
+				// 			cout << "(father) error: external command in fg had exit status != 0\nsmash > ";
+				// 		else
+				// 			cout << "(father) external command in fg finished successfully\n";
+				// 	}
+				// } else 
+        		// 	perror("Error observing process");
+    
 			}
 			else{											//father of external/homemade command in BG
+				// if(op == -1)
+					// cout << "test(father): external in BG\n";
+				// else cout << "test(father): homemade in BG\n";
 				//consider masking method
-				job_list.job_insert(pid, BG, args[0]);
 			}
 			
 			
