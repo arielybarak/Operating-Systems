@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
 
 	while(1)
 	{
-		//jobs_update();
+		// jobs_update();
 		char* args[MAX_ARGS];
 		printf("smash > ");
 		fgets(_line, MAX_LINE_SIZE, stdin);

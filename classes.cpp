@@ -66,9 +66,9 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
-	//cout << "insert: pid = " << pid << " status = ";
-	//(status==FG) ? cout << "FG" : (status==BG) ? cout << "BG": cout<< "STOPPED";
-	//cout << " is external = " << is_external;// << "\n";
+	cout << "insert: pid = " << pid << " status = ";
+	(status==FG) ? cout << "FG" : (status==BG) ? cout << "BG": cout<< "STOPPED";
+	cout << " is external = " << is_external << " \n";
 	if(status == FG){
 		strcpy(jobs[0].command, command);
 		jobs[0].pid=pid;
@@ -104,7 +104,7 @@ int job_arr::job_remove(pid_t pid, int status){
 	
 	if(pid == 0)
 		return 0;
-	
+	cout << "remove";
 	for(int i=1; i<MAX_ARGS+1; i++){							/*processes in BG*/
 		if(jobs[i].pid == pid){
 			cout << "remove: pid = " << pid << " is external = " << jobs[i].is_external << "jobs[0].full="<<jobs[0].full<<"\n";

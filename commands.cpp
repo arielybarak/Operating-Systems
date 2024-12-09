@@ -82,13 +82,13 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			numArgs--;
 		//no use of argv
 		args[numArgs+1] = NULL;	//for execvp
-		if((status == FG) && (op == -1)){
-		char temp[256];  // Ensure this buffer is large enough
-			strcpy(temp, "/usr/bin/");
-			strcat(temp, args[0]);
-			args[0] = strdup(temp);  // Duplicate and assign back to args[0]
-			cout << "args[0] is " << args[0] ;
-		}
+		// if((status == FG) && (op == -1)){
+		// char temp[256];  // Ensure this buffer is large enough
+		// 	strcpy(temp, "/usr/bin/");
+		// 	strcat(temp, args[0]);
+		// 	args[0] = strdup(temp);  // Duplicate and assign back to args[0]
+		// 	cout << "args[0] is " << args[0] ;
+		// }
 
 		pid_t pid = fork();		
 		if(pid < 0)

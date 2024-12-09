@@ -10,9 +10,11 @@ using std::string;
 using std::cout;
 using std::cerr;
 using std::prev;
-
 extern job_arr job_list;
 
+#define FG   '1'
+#define BG 	 '2'
+#define STOPPED '3'
 
 // Reaps a terminated child process (without waiting)
 // void handleFinishChld(int sig) {
@@ -42,13 +44,13 @@ void handle_ctrl_c(int sig) {
 	sigfillset(&maskSet);
 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
-	cout << "caught CTRL+C\n";
-	if((job_list.jobs[0].is_external == 1) && (job_list.jobs[0].full == true) && (job_list.jobs[0].status == FG))
+
+	if((job_list.jobs[0].is_external == 1) && (job_list.jobs[0].full == true))
 	{
-		if(kill(job_list.jobs[0].pid, SIGKILL) == 0)
+		if(!kill(job_list.jobs[0].pid, SIGKILL))
 		{ 
     		cout << "process " << job_list.jobs[0].pid << " was killed\n";
-			job_list.jobs[0].full == false;
+			job_list.fg_job_remove();
 		} else {
    	 	perror("Failed to send SIGKILL\n");
 	}
