@@ -3,10 +3,11 @@ CXX = g++
 CXXLINK = $(CXX)
 CXXFLAGS = -g -Wall -std=c++11
 OBJS = smash.o commands.o signals.o classes.o
-RM = rm -f
+RM = rm -rf
 # Creating the executable
 smash: $(OBJS)
-	$(CXXLINK) -o smash $(OBJS)
+	$(CXXLINK) -o smash $(OBJS) 
+	$(RM) $(OBJS)
 # Creating the object files
 commands.o: commands.cpp commands.h
 	$(CXX) $(CXXFLAGS) -c commands.cpp
@@ -18,4 +19,4 @@ classes.o: classes.cpp classes.h
 	$(CXX) $(CXXFLAGS) -c classes.cpp
 # Cleaning old files before new make
 clean:
-	$(RM) $(OBJS) *.o *~ "#"* core.*
+	$(RM) $(OBJS) *.o *~ "#"* core.* 

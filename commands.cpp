@@ -247,16 +247,18 @@ int kill_func(int signum , int job_id){
 int quit(int numArgs, char* arg_1){
 
 	if((numArgs == 1) && (!strcmp(arg_1,"kill"))){
-	 	//TODO kill all jobs
 		for(int i=1;i<MAX_ARGS+1;i++){
 			if(job_list.jobs[i].full){
 				bool terminated = false;
-				cout << "["<<i<<"]" << job_list.jobs[i].command << " - " <<endl;
+				cout << "[" << i << "] " << job_list.jobs[i].command << " - ";
+				kill(job_list.jobs[i].pid,SIGCONT);
 				kill(job_list.jobs[i].pid ,SIGTERM);
 				cout << "sending SIGTERM... ";
+				cout<<job_list.jobs[i].pid<<endl;
 				for (int i=0; i<5;i++){
 					int status;
 					pid_t result=waitpid(job_list.jobs[i].pid,&status,WNOHANG);
+					cout << result <<endl;
 					if(result==-1){
 						return-1;
 					}
@@ -416,14 +418,14 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 		// 	break;
 		// }
 		// // case 6	: bg(arg[1]); 			break;
-		// case 7	: {
-		// 	if(1<numArgs){
-		// 		cout << "smash error: quit: unexpected arguments" <<endl;
-		// 		return 1;
-		// 	}
-		// 	quit(numArgs,args[1]);
-		// 	break;
-		// }
+		case 7	: {
+			if(1<numArgs){
+				cout << "smash error: quit: unexpected arguments" <<endl;
+				return 1;
+			}
+			quit(numArgs,args[1]);
+			break;
+		}
 		case 8	: {
 			if(numArgs!=2){
 				cout << "smash error: diff: invalid arguments" << endl;
