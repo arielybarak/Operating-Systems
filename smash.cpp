@@ -53,11 +53,17 @@ int main(int argc, char* argv[])
 		char* args[MAX_ARGS];
 		printf("smash > ");
 		fgets(_line, MAX_LINE_SIZE, stdin);
+		for(int i=0;i<MAX_LINE_SIZE;i++){
+			if(_line[i]=='\n'){
+				_line[i]='\0';
+				break;
+			}
+		}
 		strcpy(_cmd, _line);
 		_cmd[strlen(_line) + 1] = '\0';
 		//execute command
 		int numArgs = parseCommand(_cmd,args);
-		int ret_val=processReturnValue(args,numArgs);
+		int ret_val=processReturnValue(args,numArgs,_line);
 		//initialize buffers for next command
 		_line[0] = '\0';
 		_cmd[0] = '\0';

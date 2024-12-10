@@ -66,7 +66,7 @@ int parseCommand(char* line, char* args[])
 // @brief process the given command and run it
 // @param args array, number of args job array
 
-int processReturnValue(char* args[MAX_ARGS], int numArgs)
+int processReturnValue(char* args[MAX_ARGS], int numArgs, char* command)
 {
 	int op = identify_cmd(args[0]);
 	char status = FG;
@@ -101,7 +101,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			exit(1);
 			//TODO delete job
 		}
-		else if(pid == 0)																/*child code*/
+		else if(pid==0)										/*child code*/
 		{
 			if(op == -1){									/*external command*/
 				// cout << "(son): here is external\n";
@@ -119,7 +119,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			}
 		}
 		else{ 																			/*father code*/
-			job_list.job_insert(pid, status, args[0], (op == -1));
+			job_list.job_insert(pid, status, command, (op == -1));
 			if((op == -1) && (status == FG))		/*father wait for external command in fg*/
 			{
 				// cout << "(father): external in FG\n";
@@ -202,7 +202,7 @@ int cd(char* path){
 	if(!prev_jump){
 		getcwd(temp,MAX_LINE_SIZE);
 		retval = chdir(path);
-		if(retval){
+		if(retval){ // @todo check the error(noam)
 			cout << "error: cd: target directory does not exist" << endl;
 		}
 		else{
@@ -220,63 +220,147 @@ int kill_func(int signum , int job_id){
 		cout << "job id " << job_id << " does not exist"<< endl;
 		return 1;
 	}
-	kill(job_list.jobs[job_id].pid,signum);
+	int retval=kill(job_list.jobs[job_id].pid,signum);
+	if(retval!=0){
+		perror("smash error: kill failed");
+	}
+	else{
 	cout << "signal " << signum << " was sent to pid " << 
 									job_list.jobs[job_id].pid << endl;
-	return 0;
+	}
+	return retval;
 }
-// int fg(char* job_id_str, int numArgs){
-// 	if(numArgs==1){
-// 		char* endptr;
-// 		int job_id = strtol(job_id_str, &endptr, 10);
-// 		if (*endptr != '\0' || job_id<1||100<job_id){
-// 			cout << "smash error: fg: invalid arguments" <<endl;
-// 			return 1;
-// 		}
-// 		if(!job_list.jobs[job_id].full){
-// 			cout << "smash error: fg: job id"<< job_id << "does not exist" <<endl;
-// 			return 1;
-// 		}
-// 		pid_t job_pid=job_list.jobs[job_id].pid;
-// 		job_list.job_2_front(job_pid);
-// 		int status;
-// 		pid_t pid = waitpid(pid,&status,NULL);
-
-// 	}
-// }
-int quit(int numArgs, char* arg_1){
-
-	if((numArgs == 1) && (!strcmp(arg_1,"kill"))){
-		for(int i=1;i<MAX_ARGS+1;i++){
+int fg(char* job_id_str, int numArgs){
+	int job_id;
+	if(numArgs==0){
+		job_id=0;
+		for(int i=0;i<MAX_ARGS+1;i++){
 			if(job_list.jobs[i].full){
-				bool terminated = false;
-				cout << "[" << i << "] " << job_list.jobs[i].command << " - ";
-				kill(job_list.jobs[i].pid,SIGCONT);
-				kill(job_list.jobs[i].pid ,SIGTERM);
-				cout << "sending SIGTERM... ";
-				cout<<job_list.jobs[i].pid<<endl;
-				for (int i=0; i<5;i++){
-					int status;
-					pid_t result=waitpid(job_list.jobs[i].pid,&status,WNOHANG);
-					cout << result <<endl;
-					if(result==-1){
-						return-1;
-					}
-					if(WIFEXITED(status) || WIFSIGNALED(status)){
-						cout<<"done"<<endl;
-						terminated=true;
-						break;
-					}
-					sleep(1);
-				}
-				if(!terminated){
-					cout << "sending SIGKILL... done"<<endl;
-					kill(job_list.jobs[i].pid, SIGKILL);
-				}
+				job_id=i;
 			}
 		}
+		if(job_id==0){
+			cout << "smash error: fg: jobs list is empty"<<endl;
+			return 1;
+		}
 	}
-	exit(0);
+	else{
+		char* endptr;
+		job_id = strtol(job_id_str, &endptr, 10);
+		if (*endptr != '\0' || job_id<1||100<job_id){
+			cout << "smash error: fg: invalid arguments" <<endl;
+			return 1;
+		}
+		if(!job_list.jobs[job_id].full){
+			cout <<"smash error: fg: job id "<< job_id << " does not exist" <<endl;
+			return 1;
+		}
+    }
+	pid_t job_pid=job_list.jobs[job_id].pid;
+	int front_mov=job_list.job_2_front(job_pid);
+	if(front_mov){
+		return 1;
+	}
+	int status;
+    if (waitpid(job_pid, &status, 0) == -1) {
+        perror("smash error: waitpid failed");
+        return 1;
+    }
+    return status;
+}
+int bg(char* job_id_str, int numArgs){
+	int job_id;
+	if(numArgs==0){
+		job_id=0;
+		for(int i=0;i<MAX_ARGS+1;i++){
+			if(job_list.jobs[i].full&&job_list.jobs[i].status==STOPPED){
+				job_id=i;
+			}
+		}
+		if(job_id==0){
+			cout << "smash error: bg: there are no stopped jobs to resume"<<endl;
+			return 1;
+		}
+	}
+	else{
+		char* endptr;
+		job_id = strtol(job_id_str, &endptr, 10);
+		if (*endptr != '\0' || job_id<1||100<job_id){
+			cout << "smash error: fg: invalid arguments" <<endl;
+			return 1;
+		}
+		if(!job_list.jobs[job_id].full){
+			cout <<"smash error: bg: job id "<< job_id << " does not exist" <<endl;
+			return 1;
+		}
+		if(job_list.jobs[job_id].status==BG){
+			cout <<"smash error: bg: job id "<< job_id << " is already in background" << endl;
+			return 1;
+		}
+    }
+	cout << job_list.jobs[job_id].command<< ": " << job_id << endl;
+	int ret_val=kill(job_list.jobs[job_id].pid,SIGCONT);
+	if(ret_val!=0){
+		perror("smash error: kill failed");
+	}
+	return(ret_val*-1);	//retval gets 0 on kill() success and -1 on fail so multiplying by -1 sets retval to the wanted 1 or 0
+}
+int quit(int numArgs, char* arg_1) {
+    if ((numArgs == 1) && (!strcmp(arg_1, "kill"))) {
+        for (int i = 1; i < MAX_ARGS + 1; i++) {
+            if (job_list.jobs[i].full) {
+                bool terminated = false;
+                cout << "[" << i << "] " << job_list.jobs[i].command << " - ";
+
+                // Attempt to continue the process
+                if (kill(job_list.jobs[i].pid, SIGCONT) == -1) {
+                    perror("smash error: kill failed");
+                    return 1;
+                }
+
+                // Send SIGTERM
+                if (kill(job_list.jobs[i].pid, SIGTERM) == -1) {
+                    perror("smash error: kill failed");
+                    return 1;
+                }
+                cout << "sending SIGTERM... ";
+                // Wait for the process to terminate
+                for (int j = 0; j < 5; j++) {
+                    int status;
+                    pid_t result = waitpid(job_list.jobs[i].pid, &status, WNOHANG);
+
+                    if (result == -1) {
+                        perror("smash error: waitpid failed");
+                        return 1; // Stop waiting if there's an error
+                    }
+
+                    if (result > 0) { // Process has terminated
+                        if (WIFEXITED(status) || WIFSIGNALED(status)) {
+                            cout << "done" << endl;
+                            terminated = true;
+                            break;
+                        }
+                    }
+
+                    sleep(1); // Wait 1 second before checking again
+                }
+
+                // If not terminated, send SIGKILL
+                if (!terminated) {
+                    cout << "sending SIGKILL... done" << endl;
+                    if (kill(job_list.jobs[i].pid, SIGKILL) == -1) {
+                        perror("smash error: kill failed");
+						return 1;
+                    }
+                }
+
+                // Clean up the job entry
+                job_list.jobs[i].full = false;
+            }
+        }
+    }
+    // Clean up and exit
+    exit(0);
 }
 int diff(char* path1, char* path2){
 	
@@ -287,7 +371,7 @@ int diff(char* path1, char* path2){
 	char c1;
 	char c2;
 
-	f1 = (path1, O_RDONLY);
+	f1 = open(path1, O_RDONLY);
 	if ( f1 == -1 ){
 		perror("smash error: open failed");
 		return 1;
@@ -355,7 +439,6 @@ int diff(char* path1, char* path2){
 		return 1;
 	}
 	return 0;
-
 }
 
 // @brief runs the command identified
@@ -364,10 +447,10 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 		case 0	: {
 			if(numArgs!=0){
 				cout << "smash error: showpid: expected 0 arguments\n";
+				return 1;
 			}
 			showpid();
 			return 0;
-			break;
 		}
 		case 1	: {
 			if(numArgs != 0){
@@ -375,7 +458,6 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 				return 1;
 			}
 			return pwd();
-			break;
 		}
 		case 2	: { 
 			if(numArgs!=1){
@@ -383,12 +465,10 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 				return 1;
 			}
 			return cd(args[1]);
-			break;
 		}
 		case 3	: {
 			jobs();
 			return 0; 				
-			break;
 		}
 		case 4	: { 
     		if (numArgs != 2) {
@@ -407,24 +487,27 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			}
 			// If both arguments are valid, call kill_func
 			return kill_func(signum, job_id);
-			break;
 		}
-		// case 5	: {
-		// 	if(numArgs>1){
-		// 		cout << "smash error: fg: invalid arguments" <<endl;
-		// 		return 1;
-		// 	}
-		// 	return fg(args[0],numArgs);
-		// 	break;
-		// }
-		// // case 6	: bg(arg[1]); 			break;
+		case 5	: {
+			if(numArgs>1){
+				cout << "smash error: fg: invalid arguments" <<endl;
+				return 1;
+			}
+			return fg(args[1],numArgs);
+		}
+		case 6	: {
+			if(numArgs>1){
+				cout << "smash error: bg: invalid arguments" <<endl;
+				return 1;
+			}
+			return bg(args[1],numArgs);
+		}
 		case 7	: {
 			if(1<numArgs){
 				cout << "smash error: quit: unexpected arguments" <<endl;
 				return 1;
 			}
 			quit(numArgs,args[1]);
-			break;
 		}
 		case 8	: {
 			if(numArgs!=2){
@@ -432,7 +515,6 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 				return 1;
 			}
 			diff(args[1],args[2]);
-			break;
 		}
 	}
 }

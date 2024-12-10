@@ -18,7 +18,7 @@
 class job {
 	public:
 	pid_t pid ;
-	char command[MAX_CMD_LEN];
+	char command[MAX_LINE_SIZE];
 	time_t time_stamp;
 	char status;
 	bool full;
