@@ -69,20 +69,20 @@ int parseCommand(char* line, char* args[])
 int processReturnValue(char* args[MAX_ARGS], int numArgs)
 {
 	int op = identify_cmd(args[0]);
-	char status;
+	char status = FG;
 	status = (*args[numArgs] == '%') ? BG : FG;
-	if((status == FG) && (op != -1))
-	{												/*homemade function in fg*/
-		// cout << "test: here is homemade in FG\n";
-		job_list.job_insert(-1, FG, args[0],false);
-		run_command(op,args,numArgs);
-	}
+
+	job_list.job_remove();				/*lets clean bg world*/
+	
+	if((status == BG) & (op == 5))
+		cout << "smash error: fg: cannot run in background" << endl; 
+
+	if((status == FG) && (op != -1)/*) || (op == 5)*/)
+		run_command(op,args,numArgs);						/*homemade function in fg*/
 	else
-	{	
+	{
+		
 		if(*args[numArgs] == '%')
-		/* @todo need to add exception for trying to run fg in bg using '%', fg cant run in bg.
-		added the relevant error line fo that:
-		cout << "smash error: fg: cannot run in background" << endl;*/
 			numArgs--;
 		//no use of argv
 		args[numArgs+1] = NULL;	//for execvp
@@ -104,7 +104,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 		else if(pid == 0)																/*child code*/
 		{
 			if(op == -1){									/*external command*/
-				cout << "(son): here is external\n";
+				// cout << "(son): here is external\n";
 				setpgrp();
 				execvp(args[0], args);
 				//execvp never returns unless upon error
@@ -113,7 +113,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			}
 			else{
 				run_command(op,args,numArgs);				/*homemade command*/
-				cout << "(son): here is homemade in bg\n";
+				// cout << "(son): here is homemade in bg\n";
 				// cout << "smash > ";
 				exit(0);
 			}
@@ -122,17 +122,14 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs)
 			job_list.job_insert(pid, status, args[0], (op == -1));
 			if((op == -1) && (status == FG))		/*father wait for external command in fg*/
 			{
-				cout << "(father): external in FG\n";
+				// cout << "(father): external in FG\n";
 				int exit_state;
 				if (waitpid(pid, &exit_state, WUNTRACED) == -1)			//error: doesnt return correctly (external in FG)
-				// @todo add job_remove
 				{
 					std::perror("smash error: waitpid failed");
 					return 1;
 				}	
-				cout << "exit_state: " << exit_state << endl;
-				cout << "WEXITSTATUS(exit_state): " << WEXITSTATUS(exit_state) << endl;
-
+				job_list.fg_job_remove(pid, exit_state);
 				if(WIFEXITED(exit_state)) //determines if a child exited with exit()
 				{
 				if(WEXITSTATUS(exit_state)==0)
@@ -438,27 +435,27 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 	}
 }
 
-//cout << "pid: " << job_list.jobs[i].pid << "external: "<< job_list.jobs[i].is_external << " finnished\n";
-int jobs_update(){
-	int status;									
-    pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED); 
-	// if (pid == -1){ 
-	// 		std::perror("smash error: waitpid failed");
-	// 		return 1;
-	// }
-	if(WIFEXITED(status))							//WIFEXITED determines if a child exited with exit()
-		cout << "child " << pid << " exited with exit()\n";
+
+// int jobs_update(){
+// 	int status;									
+//     pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED); 
+// 	// if (pid == -1){ 
+// 	// 		std::perror("smash error: waitpid failed");
+// 	// 		return 1;
+// 	// }
+// 	if(WIFEXITED(status))							//WIFEXITED determines if a child exited with exit()
+// 		cout << "child " << pid << " exited with exit()\n";
 	
 
-	int result = job_list.job_remove(pid, status);
+// 	int result = job_list.job_remove(pid, status);
 
-	if(result==2)
-		job_list.job_insert(pid, STOPPED, job_list.jobs[0].command, true);
+// 	if(result==2)
+// 		job_list.job_insert(pid, STOPPED, job_list.jobs[0].command, true);
 
-	return result;
-}
+// 	return result;
+// }
 
-
+//cout << "pid: " << job_list.jobs[i].pid << "external: "<< job_list.jobs[i].is_external << " finnished\n";
 
 
 	

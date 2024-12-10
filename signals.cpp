@@ -50,7 +50,7 @@ void handle_ctrl_c(int sig) {
 		if(!kill(job_list.jobs[0].pid, SIGKILL))
 		{ 
     		cout << "process " << job_list.jobs[0].pid << " was killed\n";
-			job_list.fg_job_remove();
+			// job_list.fg_job_remove();
 		} else {
    	 	perror("Failed to send SIGKILL\n");
 	}

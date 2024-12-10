@@ -66,9 +66,7 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
-	cout << "insert: pid = " << pid << " status = ";
-	(status==FG) ? cout << "FG" : (status==BG) ? cout << "BG": cout<< "STOPPED";
-	cout << " is external = " << is_external << " \n";
+	cout << "insert: pid = " << pid;
 	if(status == FG){
 		strcpy(jobs[0].command, command);
 		jobs[0].pid=pid;
@@ -94,51 +92,68 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 	return 0;
 }
 
-void job_arr::fg_job_remove(){
-	jobs[0].full= false;
+void job_arr::fg_job_remove(pid_t pid, int status){
+
+	if(WIFSTOPPED(status)){									//fg stopped
+		jobs[0].status = STOPPED;	//not needed really
+		job_insert(pid, STOPPED, jobs[0].command, true);
+		cout << "remove: pid " << pid << ": fg external stopped\n";
+	}
+	else if(pid == jobs[0].pid){							//fg reaped
+		jobs[0].full = false;		//not needed really
+		
+		cout << "remove: pid " << pid << ": fg external reaped\n";
+	}
 	jobs[0].prev_wd[0]='\0';
 	return;
 }
+//cout << "remove: pid = " << pid << " is external = " << jobs[i].is_external << "jobs[0].full="<<jobs[0].full<<"\n";
+void job_arr::job_remove(){
+	int status;	
+	pid_t pid;
 
-int job_arr::job_remove(pid_t pid, int status){
-	
-	if(pid == 0)
-		return 0;
-	cout << "remove";
 	for(int i=1; i<MAX_ARGS+1; i++){							/*processes in BG*/
-		if(jobs[i].pid == pid){
-			cout << "remove: pid = " << pid << " is external = " << jobs[i].is_external << "jobs[0].full="<<jobs[0].full<<"\n";
-			if(WIFEXITED(status)){								//if a proc exited
+		if(jobs[i].full == true){
+
+			pid = waitpid(jobs[i].pid, &status, WNOHANG | WUNTRACED | WCONTINUED); 
+			if (pid == -1){ 
+				std::perror("smash error: waitpid failed");
+				return;
+			}
+			if(WIFSTOPPED(status))									//proc stopped
+				jobs[i].status = STOPPED;
+			
+			else if(WIFCONTINUED(status))							//proc continued
+				jobs[i].status = BG;
+				
+			else if(pid == jobs[i].pid){							//proc reaped
 				free_idx = (free_idx<i) ? free_idx : i;
 				job_count--;
 				jobs[i].full = false;
-				cout << "job_remove: just perfect\n";
-				return 0;
-			}
-			else if(WIFSTOPPED(status)){						//if a proc stopped
-				jobs[i].status = STOPPED;
-				return 0;
-			}
-			else if(WIFCONTINUED(status)){						//if a proc continued
-				jobs[i].status = BG;
-				return 0;
+				cout << "job_remove: pid: " << pid << " slot: "<< i << " good bye world. it was nice really\n";
 			}
 		}
 	}
-	cout << "jobs[0].pid = " << jobs[0].pid << " and jobs[0].full = " << jobs[0].full << "\n";
-	if((jobs[0].full == true) && (jobs[0].pid == pid)){			/*processes in FG*/
-		cout << "remove: pid = " << pid << " is external = " << jobs[0].is_external << "\n";
-		jobs[0].full = false;
 
-		if(WIFSTOPPED(status)){							//if a proc stopped
-			jobs[0].status = STOPPED;
-			return 2;
-		}
-		cout << "FG job_remove: just perfect\n";
-			return 0;
-	}
-	cout << "\njob_remove: fail\n";
-	return 1;
+	
+	// if(jobs[0].full == true && jobs[0].is_external){				/*processes in FG*/
+	// 	pid = waitpid(jobs[0].pid, &status, WNOHANG | WUNTRACED | WCONTINUED); 
+	// 	if (pid == -1){ //waitpid failed
+	// 			std::perror("smash error: waitpid failed");
+	// 			return;
+	// 	}
+
+		// if(WIFSTOPPED(status)){										//fg stopped
+		// 		jobs[0].status = STOPPED;
+		// 		job_insert(pid, STOPPED, jobs[0].command, true);
+		// 		cout << "remove: pid " << pid << ": fg external stopped\n";
+		// 	}
+		// 	else if(pid == jobs[0].pid){							//fg reaped
+		// 		jobs[0].full = false;
+		// 		cout << "remove: pid " << pid << ": fg external reaped\n";
+		// 	}
+	// }
+	return;
 }
 
 int job_arr::stat_change(int pid, char stat){
