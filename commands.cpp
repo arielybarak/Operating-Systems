@@ -262,6 +262,10 @@ int fg(char* job_id_str, int numArgs){
 		return 1;
 	}
 	int status;
+	int retval=kill(job_pid,SIGCONT);
+	if(retval!=0){
+		perror("smash error: kill failed");
+	}
     if (waitpid(job_pid, &status, 0) == -1) {
         perror("smash error: waitpid failed");
         return 1;
