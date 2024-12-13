@@ -96,43 +96,22 @@ int parseCommand(char* line/*, char* args[]*/)
 void command_manager(int numArgs, char* command)
 {
 	char* args[MAX_ARGS]; 
+	char status;
 	
 	while(!command_vec.empty()){
 
-		int wait = 0;	//for debug
-		char status;
 		complex_state = -1;
 		complex_pid = -1;
-
-		// cout<<"(manager) token's size: " << token.size()<< ". elements: ";
-		// for (const auto& element : token) {
-		// 	cout << element << " ";
-		// }
-		// cout << endl;
 
 		job_list.job_remove();															/*lets clean bg world*/
 		copy(command_vec.front().begin(), command_vec.front().end(), args);
 		status = processReturnValue(args, command_vec.front().size() - 2, command, token.front());
 		
 		if(token.front()){																/*complex type "&&"*/ 
-			while(complex_state == -1){
-				
-				if(status == BG){
-					cout << "(manager) complexJob_remove is on\n";
-					job_list.complexJob_remove();					//TODO think if there isn't other solution. probably a must in case a complex command is jobs and the list should be updated
-				}
 
-				// sleep(1);
-				// wait++;
-				// if(wait == 5){
-				// 	complex_state = -1;
-				// 	complex_pid = -1;
-				// 	command_vec.clear();
-				// 	token.clear();
-				// 	cout<<"(manager) error: complex_state didn't update\n";
-				// 	return;
-				// }
-			}
+			if(status == BG)
+				job_list.complexJob_remove();		
+
 			if(complex_state > 0){
 				cout << "(manager) error: complex_state = "<<complex_state<<"\n";
 				complex_state = -1;
@@ -147,7 +126,6 @@ void command_manager(int numArgs, char* command)
 		token.erase(token.begin());
 	}
 }
-
 
 
 

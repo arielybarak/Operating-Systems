@@ -65,7 +65,18 @@ void handle_ctrl_z(int sig) {
 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
 	cout << "\nsmash: caught CTRL+Z\n";
-
+	if(job_list.jobs[0].full && job_list.jobs[0].is_external){
+		if(!job_list.job_insert(job_list.jobs[0].pid, STOPPED, job_list.jobs[0].command, true, 0)){
+			if (!kill(job_list.jobs[0].pid, SIGSTOP)) {
+				cout << "smash: process " << job_list.jobs[0].pid << " was stopped" << std::endl;
+				job_list.fg_job_remove(job_list.jobs[0].pid, 1);
+			}
+			else {
+				std::perror("smash error: kill failed");
+				return;
+			}
+		}
+	}
 	sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
 }
 
