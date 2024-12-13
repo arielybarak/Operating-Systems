@@ -7,19 +7,20 @@
 #include <iostream>
 #include <time.h>
 #include <string.h>
-
 #include "classes.h"
 #include "commands.h"
 #include "signals.h"
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <vector>
+using namespace std;
 
-using std::FILE;
-using std::string;
-using std::cout;
-using std::endl;
-using std::cerr;
-using std::prev;
+// using std::FILE;
+// using std::string;
+// using std::cout;
+// using std::endl;
+// using std::cerr;
+// using std::prev;
 
 #define FG   '1'
 #define BG 	 '2'
@@ -35,6 +36,9 @@ using std::prev;
 * global variables & data structures
 =============================================================================*/
 job_arr job_list;
+vector<vector<char*>> command_vec;
+vector<bool> token;
+
 char _line[MAX_LINE_SIZE];
 // array that contains internal commands names and their corresponding index
 
@@ -62,8 +66,8 @@ int main(int argc, char* argv[])
 		strcpy(_cmd, _line);
 		_cmd[strlen(_line) + 1] = '\0';
 		//execute command
-		int numArgs = parseCommand(_cmd,args);
-		int ret_val=processReturnValue(args,numArgs,_line);
+		int numArgs = parseCommand(_cmd/*,args*/);
+		command_manager(numArgs, _line);
 		//initialize buffers for next command
 		_line[0] = '\0';
 		_cmd[0] = '\0';
