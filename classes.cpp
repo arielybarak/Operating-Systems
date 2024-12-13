@@ -28,6 +28,9 @@ using std::prev;
 #define FG   '1'
 #define BG 	 '2'
 #define STOPPED '3'
+extern pid_t complex_pid;
+extern pid_t complex_state;
+extern int complex_i;
 
 /*=============================================================================
 * job class functions
@@ -61,12 +64,12 @@ int job_arr::get_job_idx(pid_t pid){
 	return -1;
 }
 
-int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
+int job_arr::job_insert(pid_t pid, char status, char* command, bool is_external, bool complex_op){
 	if(job_count >= 100){
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
-	cout << "insert: pid = " << pid;
+	cout << "(insert): pid = " << pid;
 	if(status == FG){
 		strcpy(jobs[0].command, command);
 		jobs[0].pid=pid;
@@ -76,6 +79,9 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 		return 0;
 	}
 	cout << " in slot " << free_idx << "\n";
+	if(complex_op)
+		complex_i = free_idx;
+
 	jobs[free_idx].full = true;
 	jobs[free_idx].pid = pid;
 	jobs[free_idx].status = status;
@@ -92,11 +98,11 @@ int job_arr::job_insert(pid_t pid, int status, char* command, bool is_external){
 	return 0;
 }
 
-void job_arr::fg_job_remove(pid_t pid, int status){
+void job_arr::fg_job_remove(pid_t pid, char status){
 
 	if(WIFSTOPPED(status)){									//fg stopped
 		jobs[0].status = STOPPED;	//not needed really
-		job_insert(pid, STOPPED, jobs[0].command, true);
+		job_insert(pid, STOPPED, jobs[0].command, true, 0);
 		cout << "remove: pid " << pid << ": fg external stopped\n";
 	}
 	else if(pid == jobs[0].pid){							//fg reaped
@@ -120,6 +126,9 @@ void job_arr::job_remove(){
 				std::perror("smash error: waitpid failed");
 				return;
 			}
+			// if(pid == complex_pid)
+			// 	complex_state = status;
+				
 			if(WIFSTOPPED(status))									//proc stopped
 				jobs[i].status = STOPPED;
 			
@@ -130,12 +139,10 @@ void job_arr::job_remove(){
 				free_idx = (free_idx<i) ? free_idx : i;
 				job_count--;
 				jobs[i].full = false;
-				cout << "job_remove: pid: " << pid << " slot: "<< i << " good bye world. it was nice really\n";
+				// cout << "job_remove: pid: " << pid << " slot: "<< i << " good bye world. it was nice really\n";
 			}
 		}
 	}
-
-	
 	// if(jobs[0].full == true && jobs[0].is_external){				/*processes in FG*/
 	// 	pid = waitpid(jobs[0].pid, &status, WNOHANG | WUNTRACED | WCONTINUED); 
 	// 	if (pid == -1){ //waitpid failed
@@ -155,6 +162,41 @@ void job_arr::job_remove(){
 	// }
 	return;
 }
+
+//  complex_pid;
+// extern pid_t complex_state;
+// extern int complex_i;
+
+
+
+void job_arr::complexJob_remove(){
+	pid_t pid;
+
+	pid = waitpid(complex_pid, &complex_state, WUNTRACED | WCONTINUED);
+
+	if (pid == -1){ 
+		std::perror("smash error: waitpid failed");
+		complex_state = 1;
+		return;
+	}
+		
+	if(WIFSTOPPED(complex_state))									//proc stopped
+		jobs[complex_i].status = STOPPED;
+	
+	else if(WIFCONTINUED(complex_state))							//proc continued
+		jobs[complex_i].status = BG;
+		
+	else if(pid == complex_pid){									//proc reaped
+		free_idx = (free_idx < complex_i) ? free_idx : complex_i;
+		job_count--;
+		jobs[complex_i].full = false;
+		// cout << "job_remove: pid: " << pid << " slot: "<< i << " good bye world. it was nice really\n";
+	}
+
+	return ;
+}
+
+
 
 int job_arr::stat_change(int pid, char stat){
 	for(int i=1; i<MAX_ARGS+1; i++){

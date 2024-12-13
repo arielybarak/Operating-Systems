@@ -8,93 +8,162 @@
 #include <unistd.h>
 #include <cstring>
 #include <fcntl.h>
-
 #include "signals.h"
 #include "commands.h"
 #include "classes.h"
+#include <vector>
+using namespace std;
 
-using std::FILE;
-using std::string;
-using std::cout;
-using std::endl;
-using std::cerr;
-using std::prev;
-
-#define FG   '1'
-#define BG 	 '2'
+#define FG  '1'
+#define BG 	'2'
 #define STOPPED '3'
 
 const char* commands[9] = {"showpid","pwd","cd","jobs","kill","fg","bg",
 															"quit","diff"};
 extern job_arr job_list;
+extern vector<vector<char*>> command_vec;
+extern vector<bool> token;	
+pid_t complex_pid = -1;
+pid_t complex_state = -1;
+int  complex_i;
+bool flag;							//doesn't have to be global, organization reasons.
+
+
 //example function for parsing commands
 
 int run_command(int op, char* args[MAX_ARGS], int numArgs);;
 int identify_cmd(char* cmd);
 
-int parseCommand(char* line, char* args[])
+
+
+
+int parseCommand(char* line/*, char* args[]*/)
 {
-	char delimiters[]=" \t\n";//parsing should be done by spaces, tabs or newlines
+	bool is_complex;
+	char delimiters[]=" \t\n"; 
+	char *tmp;
 	int numArgs = 0;
-	args[numArgs] = strtok(line, delimiters); //read strtok documentation - parses string by delimiters
-	if(!args[0])
-		return INVALID_COMMAND; //this means no tokens were found, most like since command is invalid
-		
-	while(numArgs < MAX_ARGS)
+	
+	tmp = strtok(line, delimiters); 				
+	if(!tmp)
+		return INVALID_COMMAND; 					//no tokens were found
+	if (!command_vec.empty())
+		cout << "error: complex_vec isn't empty\n";
+
+    command_vec.emplace_back();
+	command_vec.back().push_back(tmp);
+
+	while((numArgs < MAX_ARGS) && (tmp))
 	{
-		args[++numArgs] = strtok(NULL, delimiters); //first arg NULL -> keep tokenizing from previous call
-		if(!args[numArgs]){
+		
+		numArgs++;
+		tmp = strtok(NULL, delimiters); 
+		
+		if(tmp == NULL){
+			command_vec.back().push_back(tmp);
 			numArgs--;
 			break;
 		}
+
+		is_complex = ((!strcmp(tmp, "&&")) || (!strcmp(tmp, ";")));
+		if(is_complex){
+			// cout << "(parsecommand): token front\n";
+			if(!strcmp(tmp, "&&")) 
+				token.push_back(true);
+			else
+				token.push_back(false);
+			// cout<<"new vector\n";
+			command_vec.back().push_back(NULL);
+			command_vec.emplace_back();
+		}
+		else{
+			// cout << "try to push_back\n";
+			command_vec.back().push_back(tmp);
+		}	
 	}
-	/*
-	At this point cmd contains the command string and the args array contains
-	the arguments. You can return them via struct/class, for example in C:
-		typedf struct
-		{
-			char* cmd;
-			char* args[MAX_ARGS];
-		} Command;
-	Or continue the execution from here.
-	*/
+	// cout << "vector size is "<< command_vec.back().size() << "\n";
+	// if(token.empty())
+		token.push_back(false);
+	
+	if (command_vec.empty())
+    	cout << "Error: command_vec or token is empty at function start.\n";
 	return numArgs;
 }
 
-//example function for getting/setting return value of a process.
+
+// cout<<"command_vec.front() size is "<<command_vec.front().size()<<" and numArgs is "<<numArgs<< "\n";
+
+void command_manager(int numArgs, char* command)
+{
+	char* args[MAX_ARGS]; 
+	char status;
+	
+	while(!command_vec.empty()){
+
+		complex_state = -1;
+		complex_pid = -1;
+
+		job_list.job_remove();						/*lets clean bg world*/
+		copy(command_vec.front().begin(), command_vec.front().end(), args);
+		status = processReturnValue(args, command_vec.front().size() - 2, command, token.front());
+		
+		if(token.front()){								/*complex type "&&"*/ 
+
+			if(status == BG)
+				job_list.complexJob_remove();		
+
+			if(complex_state > 0){
+				cout << "(manager) error: complex_state = "<<complex_state<<"\n";
+				complex_state = -1;
+				complex_pid = -1;
+				command_vec.clear();
+				token.clear();
+				return;
+			}
+		}
+		// cout<<"(manager) erase sub-vector. complex_state = " << complex_state<<"\n";
+		command_vec.erase(command_vec.begin());
+		token.erase(token.begin());
+	}
+}
+
+
 
 // @brief process the given command and run it
 // @param args array, number of args job array
-
-int processReturnValue(char* args[MAX_ARGS], int numArgs, char* command)
+char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool complex_op)
 {
 	int op = identify_cmd(args[0]);
 	char status = FG;
-	status = (*args[numArgs] == '%') ? BG : FG;
-
-	job_list.job_remove();				/*lets clean bg world*/
+	int ret;
+	args[numArgs+1] = NULL;
 	
+	status = (!strcmp(args[numArgs], "%")) ? BG : FG;
+	// cout << "op: "<< op <<" status: "<< status << "numArgs: " << numArgs <<"\n";
 	if((status == BG) & (op == 5))
 		cout << "smash error: fg: cannot run in background" << endl; 
 
-	if((status == FG) && (op != -1)/*) || (op == 5)*/)
-		run_command(op,args,numArgs);						/*homemade function in fg*/
+	if(((status == FG) && (op > -1)) || (op == 5)){
+		// cout<<"homemade fg\n";
+		job_list.job_insert(getpid(),FG,command,false,complex_op);
+		ret = run_command(op,args,numArgs);	/*homemade function in fg*/
+		//////////////// @todo barak remove job from foreground
+		if(complex_op){
+			complex_state = ret;
+			cout << "complex_state: "<<complex_state<<"\n";
+		}
+	}
 	else
 	{
-		
-		if(*args[numArgs] == '%')
+		if(status == BG)
 			numArgs--;
-		//no use of argv
+		
 		args[numArgs+1] = NULL;	//for execvp
-		// if((status == FG) && (op == -1)){
-		// char temp[256];  // Ensure this buffer is large enough
-		// 	strcpy(temp, "/usr/bin/");
-		// 	strcat(temp, args[0]);
-		// 	args[0] = strdup(temp);  // Duplicate and assign back to args[0]
-		// 	cout << "args[0] is " << args[0] ;
-		// }
 
-		pid_t pid = fork();		
+		pid_t pid = fork();	
+		if(complex_op)	
+			complex_pid = pid;
+
 		if(pid < 0)
 		{
 			perror("fork fail");
@@ -104,7 +173,7 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs, char* command)
 		else if(pid==0)										/*child code*/
 		{
 			if(op == -1){									/*external command*/
-				// cout << "(son): here is external\n";
+				// cout << "(son): external\n";
 				setpgrp();
 				execvp(args[0], args);
 				//execvp never returns unless upon error
@@ -112,23 +181,24 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs, char* command)
 				exit(1); 
 			}
 			else{
-				run_command(op,args,numArgs);				/*homemade command*/
-				// cout << "(son): here is homemade in bg\n";
-				// cout << "smash > ";
-				exit(0);
+				ret = run_command(op,args,numArgs);				/*homemade command*/
+				exit(ret);
 			}
 		}
 		else{ 																			/*father code*/
-			job_list.job_insert(pid, status, command, (op == -1));
+			job_list.job_insert(pid, status, command, (op == -1), complex_op);
 			if((op == -1) && (status == FG))		/*father wait for external command in fg*/
 			{
-				// cout << "(father): external in FG\n";
 				int exit_state;
 				if (waitpid(pid, &exit_state, WUNTRACED) == -1)			//error: doesnt return correctly (external in FG)
 				{
 					std::perror("smash error: waitpid failed");
-					return 1;
+					return '-1';
+					/// @todo barak change this return value, its needs to be a single char
 				}	
+				cout<< "(father): external FG\n";
+				if(complex_op)
+					complex_state = exit_state;
 				job_list.fg_job_remove(pid, exit_state);
 				if(WIFEXITED(exit_state)) //determines if a child exited with exit()
 				{
@@ -137,20 +207,16 @@ int processReturnValue(char* args[MAX_ARGS], int numArgs, char* command)
 				else
 					cout << "external command in fg finished successfully\n";
 				}
+				return status;
     
 			}
-			else{											//father of external/homemade command in BG
+			else{											//father of command in BG
 				// if(op == -1)
-					// cout << "test(father): external in BG\n";
-				// else cout << "test(father): homemade in BG\n";
-				//consider masking method
+					// cout << "(father): in BG\n";
 			}
-			
-			
 		}
 	}
-
-	return 0;
+	return status;
 }
 
 // @brief identifys which command and returns the corresponding index
@@ -211,9 +277,9 @@ int cd(char* path){
 	}
 	return retval;
 }
-void jobs(){
+bool jobs(){
 	job_list.print();
-	return;
+	return 0;
 }
 int kill_func(int signum , int job_id){
 	if(!job_list.jobs[job_id].full){
@@ -259,6 +325,7 @@ int fg(char* job_id_str, int numArgs){
 	pid_t job_pid=job_list.jobs[job_id].pid;
 	int front_mov=job_list.job_2_front(job_pid);
 	if(front_mov){
+		cout << "move to front failed"<<endl; 
 		return 1;
 	}
 	int status;
@@ -447,6 +514,7 @@ int diff(char* path1, char* path2){
 
 // @brief runs the command identified
 int run_command(int op, char* args[MAX_ARGS], int numArgs){
+	cout<<"(run_command)\n";
 	switch (op){
 		case 0	: {
 			if(numArgs!=0){
@@ -520,6 +588,7 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			}
 			diff(args[1],args[2]);
 		}
+		default: return 0;
 	}
 }
 
