@@ -66,10 +66,11 @@ void handle_ctrl_z(int sig) {
 
 	cout << "\nsmash: caught CTRL+Z\n";
 	if(job_list.jobs[0].full && job_list.jobs[0].is_external){
-		
+
 		if (!kill(job_list.jobs[0].pid, SIGSTOP)) {
 			cout << "smash: process " << job_list.jobs[0].pid << " was stopped" << std::endl;
 			job_list.fg_job_remove(job_list.jobs[0].pid, 1);
+			job_list.job_insert(job_list.jobs[0].pid, STOPPED, job_list.jobs[0].command, job_list.jobs[0].is_external, 0);
 		}
 		else {
 			std::perror("smash error: kill failed");

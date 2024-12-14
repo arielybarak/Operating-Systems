@@ -17,6 +17,7 @@ using namespace std;
 #define FG  '1'
 #define BG 	'2'
 #define STOPPED '3'
+#define FAIL '4'
 
 const char* commands[9] = {"showpid","pwd","cd","jobs","kill","fg","bg",
 															"quit","diff"};
@@ -35,11 +36,56 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs);;
 int identify_cmd(char* cmd);
 
 
-
-
-int parseCommand(char* line/*, char* args[]*/)
+void Complex_SpaceCheck(char* &tmp, int &numArgs)
 {
-	bool is_complex;
+	char* tmp2 = new char[MAX_ARGS];
+	int i=0, j=0;
+	
+	if((!strcmp(tmp, "&&")) || (!strcmp(tmp, ";"))){
+		if(!strcmp(tmp, "&&")) 
+			token.push_back(true);
+		else
+			token.push_back(false);
+		// command_vec.back().push_back(NULL);
+		command_vec.emplace_back();
+		return;
+	} 
+
+	while (tmp[i] != '\0') {
+
+		if ((tmp[i] == ';') || ((tmp[i] == '&') && (tmp[i+1] == '&'))) {
+			
+			tmp2[j] = '\0'; 
+			j = 0; 
+			if(!(tmp[i] == ';'))
+				i++;
+
+			char* tmp2_copy = new char[strlen(tmp2) + 1];
+            strcpy(tmp2_copy, tmp2);
+
+			token.push_back(!(tmp[i] == ';'));
+			command_vec.back().push_back(tmp2_copy);
+			// command_vec.back().push_back(NULL);
+			command_vec.emplace_back();
+		}
+		else {
+			tmp2[j++] = tmp[i]; 
+		}
+		i++;
+	}
+
+	tmp2[j] = '\0';
+	if(strlen(tmp2)>0){
+		char* tmp2_copy = new char[strlen(tmp2) + 1];
+        strcpy(tmp2_copy, tmp2);
+
+		command_vec.back().push_back(tmp2_copy);
+	}
+	delete[] tmp2;
+}
+
+int parseCommand(char* line)
+{
 	char delimiters[]=" \t\n"; 
 	char *tmp;
 	int numArgs = 0;
@@ -48,42 +94,23 @@ int parseCommand(char* line/*, char* args[]*/)
 	if(!tmp)
 		return INVALID_COMMAND; 					//no tokens were found
 	if (!command_vec.empty())
-		cout << "error: complex_vec isn't empty\n";
+		cout << "smash error: complex_vec isn't empty\n";
 
     command_vec.emplace_back();
-	command_vec.back().push_back(tmp);
+	Complex_SpaceCheck(tmp, numArgs);
 
 	while((numArgs < MAX_ARGS) && (tmp))
 	{
-		
 		numArgs++;
 		tmp = strtok(NULL, delimiters); 
-		
 		if(tmp == NULL){
-			command_vec.back().push_back(tmp);
+			// command_vec.back().push_back(tmp);
 			numArgs--;
 			break;
 		}
-
-		is_complex = ((!strcmp(tmp, "&&")) || (!strcmp(tmp, ";")));
-		if(is_complex){
-			// cout << "(parsecommand): token front\n";
-			if(!strcmp(tmp, "&&")) 
-				token.push_back(true);
-			else
-				token.push_back(false);
-			// cout<<"new vector\n";
-			command_vec.back().push_back(NULL);
-			command_vec.emplace_back();
-		}
-		else{
-			// cout << "try to push_back\n";
-			command_vec.back().push_back(tmp);
-		}	
+		Complex_SpaceCheck(tmp, numArgs);
 	}
-	// cout << "vector size is "<< command_vec.back().size() << "\n";
-	// if(token.empty())
-		token.push_back(false);
+	token.push_back(false);
 	
 	if (command_vec.empty())
     	cout << "Error: command_vec or token is empty at function start.\n";
@@ -91,13 +118,13 @@ int parseCommand(char* line/*, char* args[]*/)
 }
 
 
-// cout<<"command_vec.front() size is "<<command_vec.front().size()<<" and numArgs is "<<numArgs<< "\n";
+
 
 void command_manager(int numArgs, char* command)
 {
 	char* args[MAX_ARGS]; 
 	char status;
-	
+
 	while(!command_vec.empty()){
 
 		complex_state = -1;
@@ -105,7 +132,10 @@ void command_manager(int numArgs, char* command)
 
 		job_list.job_remove();						/*lets clean bg world*/
 		copy(command_vec.front().begin(), command_vec.front().end(), args);
-		status = processReturnValue(args, command_vec.front().size() - 2, command, token.front());
+		status = processReturnValue(args, command_vec.front().size() - 1, command, token.front());
+
+		if(status == FAIL)
+			cout<<"status command failed\n";
 		
 		if(token.front()){								/*complex type "&&"*/ 
 
@@ -113,7 +143,6 @@ void command_manager(int numArgs, char* command)
 				job_list.complexJob_remove();		
 
 			if(complex_state > 0){
-				cout << "(manager) error: complex_state = "<<complex_state<<"\n";
 				complex_state = -1;
 				complex_pid = -1;
 				command_vec.clear();
@@ -121,7 +150,6 @@ void command_manager(int numArgs, char* command)
 				return;
 			}
 		}
-		// cout<<"(manager) erase sub-vector. complex_state = " << complex_state<<"\n";
 		command_vec.erase(command_vec.begin());
 		token.erase(token.begin());
 	}
@@ -133,25 +161,24 @@ void command_manager(int numArgs, char* command)
 // @param args array, number of args job array
 char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool complex_op)
 {
-	int op = identify_cmd(args[0]);
+	pid_t pid;
 	char status = FG;
 	int ret;
 	args[numArgs+1] = NULL;
-	
+	int op = identify_cmd(args[0]);
 	status = (!strcmp(args[numArgs], "%")) ? BG : FG;
-	// cout << "op: "<< op <<" status: "<< status << "numArgs: " << numArgs <<"\n";
+
 	if((status == BG) & (op == 5))
 		cout << "smash error: fg: cannot run in background" << endl; 
 
 	if(((status == FG) && (op > -1)) || (op == 5)){
-		// cout<<"homemade fg\n";
-		job_list.job_insert(getpid(),FG,command,false,complex_op);
-		ret = run_command(op,args,numArgs);	/*homemade function in fg*/
-		//////////////// @todo barak remove job from foreground
-		if(complex_op){
+		pid = getpid();
+		job_list.job_insert(pid,FG,command,false,complex_op);
+		ret = run_command(op,args,numArgs);								/*homemade function in fg*/
+		job_list.fg_job_remove(pid, 0);
+		if(complex_op)
 			complex_state = ret;
-			cout << "complex_state: "<<complex_state<<"\n";
-		}
+			// cout << "complex_state: "<<complex_state<<"\n";
 	}
 	else
 	{
@@ -160,7 +187,7 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 		
 		args[numArgs+1] = NULL;	//for execvp
 
-		pid_t pid = fork();	
+		pid = fork();	
 		if(complex_op)	
 			complex_pid = pid;
 
@@ -177,7 +204,7 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 				setpgrp();
 				execvp(args[0], args);
 				//execvp never returns unless upon error
-				perror("(son) execvp sadly fail");
+				perror("smash error: execvp failed");
 				exit(1); 
 			}
 			else{
@@ -193,26 +220,16 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 				if (waitpid(pid, &exit_state, WUNTRACED) == -1)			//error: doesnt return correctly (external in FG)
 				{
 					std::perror("smash error: waitpid failed");
-					return '-1';
-					/// @todo barak change this return value, its needs to be a single char
+					return '4';
 				}	
-				cout<< "(father): external FG\n";
 				if(complex_op)
 					complex_state = exit_state;
 				job_list.fg_job_remove(pid, exit_state);
-				if(WIFEXITED(exit_state)) //determines if a child exited with exit()
-				{
-				if(WEXITSTATUS(exit_state)==0)
-					cout << "error: external command in fg had exit status != 0\n";
-				else
-					cout << "external command in fg finished successfully\n";
-				}
+
+				if(WIFEXITED(exit_state) && (WEXITSTATUS(exit_state)!=0)) //determines if a child exited with exit()
+					cout << "smash error: external command in fg had exit status != 0\n";
+				
 				return status;
-    
-			}
-			else{											//father of command in BG
-				// if(op == -1)
-					// cout << "(father): in BG\n";
 			}
 		}
 	}
@@ -514,7 +531,7 @@ int diff(char* path1, char* path2){
 
 // @brief runs the command identified
 int run_command(int op, char* args[MAX_ARGS], int numArgs){
-	cout<<"(run_command)\n";
+
 	switch (op){
 		case 0	: {
 			if(numArgs!=0){
