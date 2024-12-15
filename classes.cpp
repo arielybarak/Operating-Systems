@@ -28,6 +28,8 @@ using std::prev;
 #define FG   '1'
 #define BG 	 '2'
 #define STOPPED '3'
+
+extern job_arr job_list;
 extern pid_t complex_pid;
 extern pid_t complex_state;
 extern int complex_i;
@@ -69,7 +71,7 @@ int job_arr::job_insert(pid_t pid, char status, char* command, bool is_external,
 		cout << "fail to insert job, job list is full\n";
 		return 1;
 	}
-
+	// cout<<"job_insert\n";
 	if(status == FG){
 		strcpy(jobs[0].command, command);
 		jobs[0].pid=pid;
@@ -80,7 +82,7 @@ int job_arr::job_insert(pid_t pid, char status, char* command, bool is_external,
 	}
 	if(complex_op)
 		complex_i = free_idx;
-
+	
 	jobs[free_idx].full = true;
 	jobs[free_idx].pid = pid;
 	jobs[free_idx].status = status;
@@ -102,7 +104,7 @@ void job_arr::fg_job_remove(pid_t pid, char status){
 	if(WIFSTOPPED(status)){									//fg stopped
 		jobs[0].status = STOPPED;	
 		job_insert(pid, STOPPED, jobs[0].command, true, 0);
-		cout << "remove: pid " << pid << ": fg external stopped\n";
+		cout << "(fg_job_remove): pid " << pid << ": fg external stopped\n";
 	}
 	else if(pid == jobs[0].pid)							//fg reaped
 		jobs[0].full = false;		

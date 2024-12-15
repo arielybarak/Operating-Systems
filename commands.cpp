@@ -34,7 +34,7 @@ bool flag;							//doesn't have to be global, organization reasons.
 
 int run_command(int op, char* args[MAX_ARGS], int numArgs);;
 int identify_cmd(char* cmd);
-
+bool jobs();
 
 void Complex_SpaceCheck(char* &tmp, int &numArgs)
 {
@@ -126,14 +126,14 @@ void command_manager(int numArgs, char* command)
 	char status;
 
 	while(!command_vec.empty()){
-
+		// cout<<"manager loop\n";
 		complex_state = -1;
 		complex_pid = -1;
-
+		
 		job_list.job_remove();						/*lets clean bg world*/
 		copy(command_vec.front().begin(), command_vec.front().end(), args);
 		status = processReturnValue(args, command_vec.front().size() - 1, command, token.front());
-
+		
 		if(status == FAIL)
 			cout<<"status command failed\n";
 		
@@ -167,14 +167,15 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 	args[numArgs+1] = NULL;
 	int op = identify_cmd(args[0]);
 	status = (!strcmp(args[numArgs], "%")) ? BG : FG;
-
+	cout<<"status: "<<status<<"\n";
 	if((status == BG) & (op == 5))
 		cout << "smash error: fg: cannot run in background" << endl; 
 
-	if(((status == FG) && (op > -1)) || (op == 5)){
+	if(((status == FG) && (op > -1)) || (op == 5)){								/*homemade function in fg*/
+		cout<<"homemade function in fg\n";
 		pid = getpid();
 		job_list.job_insert(pid,FG,command,false,complex_op);
-		ret = run_command(op,args,numArgs);								/*homemade function in fg*/
+		ret = run_command(op,args,numArgs);								
 		job_list.fg_job_remove(pid, 0);
 		if(complex_op)
 			complex_state = ret;
@@ -188,6 +189,7 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 		args[numArgs+1] = NULL;	//for execvp
 
 		pid = fork();	
+
 		if(complex_op)	
 			complex_pid = pid;
 
@@ -214,10 +216,11 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 		}
 		else{ 																			/*father code*/
 			job_list.job_insert(pid, status, command, (op == -1), complex_op);
-			if((op == -1) && (status == FG))		/*father wait for external command in fg*/
+			if((op == -1) && (status == FG))						/*father wait for external command in fg*/
 			{
+				cout <<"FG external wait\n";
 				int exit_state;
-				if (waitpid(pid, &exit_state, WUNTRACED) == -1)			//error: doesnt return correctly (external in FG)
+				if (waitpid(pid, &exit_state, WUNTRACED) == -1)	
 				{
 					std::perror("smash error: waitpid failed");
 					return '4';
@@ -263,6 +266,7 @@ int pwd(){
 	return 0;
 }
 int cd(char* path){
+	jobs();
 	int retval=0;
 	pid_t pid=getpid();
 	int idx=job_list.get_job_idx(pid);
