@@ -104,7 +104,6 @@ void job_arr::fg_job_remove(pid_t pid, char status){
 	if(WIFSTOPPED(status)){									//fg stopped
 		jobs[0].status = STOPPED;	
 		job_insert(pid, STOPPED, jobs[0].command, true, 0);
-		cout << "(fg_job_remove): pid " << pid << ": fg external stopped\n";
 	}
 	else if(pid == jobs[0].pid)							//fg reaped
 		jobs[0].full = false;		

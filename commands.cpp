@@ -3,15 +3,19 @@
 #include <iostream>
 #include <time.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <string.h>
 #include <unistd.h>
 #include <cstring>
 #include <fcntl.h>
+#include <vector>
+#include <errno.h>
+
 #include "signals.h"
 #include "commands.h"
 #include "classes.h"
-#include <vector>
 using namespace std;
 
 #define FG  '1'
@@ -165,14 +169,19 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 	char status = FG;
 	int ret;
 	args[numArgs+1] = NULL;
-	int op = identify_cmd(args[0]);
 	status = (!strcmp(args[numArgs], "%")) ? BG : FG;
-	cout<<"status: "<<status<<"\n";
+	int last_arg_len=strlen(args[numArgs]);
+	if((status==FG)&&(args[numArgs][last_arg_len-1]=='%')){
+		status=BG;
+		args[numArgs][last_arg_len-1]='\0';
+		numArgs++;
+	}
+	int op = identify_cmd(args[0]);
 	if((status == BG) & (op == 5))
 		cout << "smash error: fg: cannot run in background" << endl; 
 
 	if(((status == FG) && (op > -1)) || (op == 5)){								/*homemade function in fg*/
-		cout<<"homemade function in fg\n";
+		//cout<<"homemade function in fg\n";
 		pid = getpid();
 		job_list.job_insert(pid,FG,command,false,complex_op);
 		ret = run_command(op,args,numArgs);								
@@ -218,7 +227,7 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 			job_list.job_insert(pid, status, command, (op == -1), complex_op);
 			if((op == -1) && (status == FG))						/*father wait for external command in fg*/
 			{
-				cout <<"FG external wait\n";
+				//cout <<"FG external wait\n";
 				int exit_state;
 				if (waitpid(pid, &exit_state, WUNTRACED) == -1)	
 				{
@@ -256,9 +265,9 @@ void showpid (){
 	return;
 }
 int pwd(){
-	char buffer[MAX_LINE_SIZE]="/n";
-	getcwd(buffer,MAX_LINE_SIZE);
-	if(buffer==nullptr){
+	char buffer[MAX_LINE_SIZE]="\0";
+	char* retval=getcwd(buffer,MAX_LINE_SIZE);
+	if(retval==NULL){
 		cout <<"getcwd failed\n";
 		return 1;
 	}
@@ -266,34 +275,32 @@ int pwd(){
 	return 0;
 }
 int cd(char* path){
-	jobs();
 	int retval=0;
-	pid_t pid=getpid();
-	int idx=job_list.get_job_idx(pid);
 	bool prev_jump=false;
-	if(idx==-1){
-		cout << "job not found"<< endl;
-		return 1;
-	}
 	char temp [MAX_LINE_SIZE];
 	if(!strcmp(path,"-")){
-		if(job_list.jobs[idx].prev_wd[0]=='\0'){
+		if(job_list.jobs[0].prev_wd[0]=='\0'){
 			cout << "error: cd: old pwd not set" << endl;
 			return 0;
 		}
 		prev_jump=true;
-		strcpy(temp,job_list.jobs[idx].prev_wd);
-		getcwd(job_list.jobs[idx].prev_wd,MAX_LINE_SIZE);
+		strcpy(temp,job_list.jobs[0].prev_wd);
+		getcwd(job_list.jobs[0].prev_wd,MAX_LINE_SIZE);
 		retval = chdir(temp);
 	}
 	if(!prev_jump){
 		getcwd(temp,MAX_LINE_SIZE);
 		retval = chdir(path);
 		if(retval){ // @todo check the error(noam)
-			cout << "error: cd: target directory does not exist" << endl;
+			if(errno==ENOENT){
+				cout << "smash error: cd: target directory does not exist" << endl;
+			}
+			else{
+				std::perror("smash error: chdir failed");
+			}
 		}
 		else{
-			strcpy(job_list.jobs[idx].prev_wd,temp);
+			strcpy(job_list.jobs[0].prev_wd,temp);
 		}
 	}
 	return retval;
@@ -345,6 +352,7 @@ int fg(char* job_id_str, int numArgs){
     }
 	pid_t job_pid=job_list.jobs[job_id].pid;
 	int front_mov=job_list.job_2_front(job_pid);
+	job_list.jobs[0].is_external=true;
 	if(front_mov){
 		cout << "move to front failed"<<endl; 
 		return 1;
@@ -395,6 +403,10 @@ int bg(char* job_id_str, int numArgs){
 	if(ret_val!=0){
 		perror("smash error: kill failed");
 	}
+	else{
+		job_list.jobs[job_id].status=BG;
+	}
+	cout<<"bg retval= "<<ret_val<<endl;
 	return(ret_val*-1);	//retval gets 0 on kill() success and -1 on fail so multiplying by -1 sets retval to the wanted 1 or 0
 }
 int quit(int numArgs, char* arg_1) {
@@ -454,84 +466,108 @@ int quit(int numArgs, char* arg_1) {
     // Clean up and exit
     exit(0);
 }
-int diff(char* path1, char* path2){
-	
-	int f1;
-	int f2;
-	int ret_val1;
-	int ret_val2;
-	char c1;
-	char c2;
+#include <iostream>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <cstring>
+#include <cerrno>
+using namespace std;
 
-	f1 = open(path1, O_RDONLY);
-	if ( f1 == -1 ){
-		perror("smash error: open failed");
-		return 1;
-	}
-	f2 = open(path2, O_RDONLY);
-	if ( f2 == -1 ){
-		perror("smash error: open failed");
-		if ( close(f1) == -1) {
-			perror("smash error: close failed");
-		}
-		return 1;
-	}
-	while (1){
-		ret_val1 = read(f1, &c1, 1); // read one char from f1
-		if (ret_val1 == -1){
-			perror("smash error: read failed");
-			if ( close(f1) == -1) {
-				perror("smash error: close failed");
-			}
-			if ( close(f2) == -1) {
-				perror("smash error: close failed");
-			}
-			return 1;
-		}
-		ret_val2 = read(f2, &c2, 1); // read one char from f2
+int diff(char* path1, char* path2) {
+    int f1, f2;
+    int ret_val1, ret_val2;
+    char c1, c2;
+    struct stat stat_buf;
 
-		if ( ret_val2 == -1 ){
-			perror("smash error: read failed");
-			if ( close(f1) == -1) {
-				perror("smash error: close failed");
-			}
-			if ( close(f2) == -1) {
-				perror("smash error: close failed");
-			}
-			return 1;
-		}
+    // Check if path1 is a valid file
+    if (stat(path1, &stat_buf) == -1) {
+        if (errno == ENOENT) {
+            cout << "smash error: diff: expected valid paths for files" << endl;
+        } 
+		else {
+            perror("smash error: stat failed");
+        }
+        return 1;
+    }
+    if (!S_ISREG(stat_buf.st_mode)) {
+        cout << "smash error: paths are not files" << endl;
+        return 1;
+    }
 
-		if( c1 != c2 ) { // found a char not matching
-			break;
-		}
+    // Check if path2 is a valid file
+    if (stat(path2, &stat_buf) == -1) {
+        if (errno == ENOENT) {
+            cout << "smash error: diff: expected valid paths for files" << endl;
+        } else {
+            perror("smash error: stat failed");
+        }
+        return 1;
+    }
+    if (!S_ISREG(stat_buf.st_mode)) {
+        cout << "smash error: diff: paths are not files" << endl;
+        return 1;
+    }
 
-		if ( (ret_val1 == 0) || (ret_val2 == 0) ){
-			break;
-		}
-	} // end of while
+    // Open files
+    f1 = open(path1, O_RDONLY);
+    if (f1 == -1) {
+        perror("smash error: open failed");
+        return 1;
+    }
+    f2 = open(path2, O_RDONLY);
+    if (f2 == -1) {
+        perror("smash error: open failed");
+        close(f1);
+        return 1;
+    }
 
-	if ( c1 == c2 ){ // files match
-		cout<<"0"<<endl;
-	}
+    // Compare files character by character
+    while (1) {
+        ret_val1 = read(f1, &c1, 1); // Read one char from f1
+        if (ret_val1 == -1) {
+            perror("smash error: read failed");
+            close(f1);
+            close(f2);
+            return 1;
+        }
+        ret_val2 = read(f2, &c2, 1); // Read one char from f2
+        if (ret_val2 == -1) {
+            perror("smash error: read failed");
+            close(f1);
+            close(f2);
+            return 1;
+        }
 
-	else { // file don't match
-		cout<<"1"<<endl;
-	}
+        if (c1 != c2) { // Found a char not matching
+            cout << "1" << endl;
+            close(f1);
+            close(f2);
+            return 0;
+        }
 
-	// closing files
-	if ( close(f1) == -1 ) {
-		perror("smash error: close failed");
-		if ( close(f2) == -1) {
-			perror("smash error: close failed");
-		}
-		return 1;
-	}
-	if ( close(f2) == -1) {
-		perror("smash error: fclose failed");
-		return 1;
-	}
-	return 0;
+        if ((ret_val1 == 0) || (ret_val2 == 0)) { // End of file(s)
+            break;
+        }
+    }
+
+    // Files match
+    cout << "0" << endl;
+
+    // Close files
+    if (close(f1) == -1) {
+        perror("smash error: close failed");
+        close(f2);
+        return 1;
+    }
+    if (close(f2) == -1) {
+        perror("smash error: close failed");
+        return 1;
+    }
+
+    return 0;
 }
+
 
 // @brief runs the command identified
 int run_command(int op, char* args[MAX_ARGS], int numArgs){
@@ -604,7 +640,7 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 		}
 		case 8	: {
 			if(numArgs!=2){
-				cout << "smash error: diff: invalid arguments" << endl;
+				cout << "smash error: diff: expected 2 arguments" << endl;
 				return 1;
 			}
 			diff(args[1],args[2]);

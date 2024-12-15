@@ -7,7 +7,6 @@ RM = rm -rf
 # Creating the executable
 smash: $(OBJS)
 	$(CXXLINK) -o smash $(OBJS) 
-	$(RM) $(OBJS)
 # Creating the object files
 commands.o: commands.cpp commands.h
 	$(CXX) $(CXXFLAGS) -c commands.cpp

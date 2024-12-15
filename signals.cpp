@@ -68,7 +68,7 @@ void handle_ctrl_z(int sig) {
 	if(job_list.jobs[0].full && job_list.jobs[0].is_external){
 
 		if (!kill(job_list.jobs[0].pid, SIGSTOP)) {
-			cout << "smash: process " << job_list.jobs[0].pid << " was stopped" << std::endl;
+			cout << "smash: process " << job_list.jobs[0].pid << " was stopped\n";
 			job_list.fg_job_remove(job_list.jobs[0].pid, 1);
 		}
 		else {
