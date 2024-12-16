@@ -44,16 +44,17 @@ void handle_ctrl_c(int sig) {
 	sigfillset(&maskSet);
 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
-	cout << "\nsmash: caught CTRL+C\n";
+	cout << "\nsmash: caught CTRL+C\nsmash > ";
 	if((job_list.jobs[0].is_external == 1) && (job_list.jobs[0].full == true))
 	{
 		if(!kill(job_list.jobs[0].pid, SIGKILL))
 		{ 
-    		cout << "process " << job_list.jobs[0].pid << " was killed\n";
+    		cout << "smash: process " << job_list.jobs[0].pid << " was killed\n";
 			// job_list.fg_job_remove();
-		} else {
-   	 	perror("Failed to send SIGKILL\n\nsmash: ");
-	}
+		} 
+		else {
+   	 	perror("smash error: kill failed");
+		}
 	}
 	sigprocmask(SIG_SETMASK, &oldSet, &maskSet);
 }
@@ -64,7 +65,7 @@ void handle_ctrl_z(int sig) {
 	sigfillset(&maskSet);
 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
-	cout << "\nsmash: caught CTRL+Z\n";
+	cout << "\nsmash: caught CTRL+Z\nsmash > ";
 	if(job_list.jobs[0].full && job_list.jobs[0].is_external){
 
 		if (!kill(job_list.jobs[0].pid, SIGSTOP)) {

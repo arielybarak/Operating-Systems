@@ -13,6 +13,8 @@
 #include <vector>
 #include <errno.h>
 
+using namespace std;
+
 #include "signals.h"
 #include "commands.h"
 #include "classes.h"
@@ -22,6 +24,17 @@ using namespace std;
 #define BG 	'2'
 #define STOPPED '3'
 #define FAIL '4'
+
+#define SHOWPID 0
+#define PWD 	1
+#define CD 		2
+#define JOBS 	3
+#define KILL 	4
+#define FG_F 	5
+#define BG_F	6
+#define QUIT 	7
+#define DIFF 	8
+
 
 const char* commands[9] = {"showpid","pwd","cd","jobs","kill","fg","bg",
 															"quit","diff"};
@@ -137,6 +150,7 @@ void command_manager(int numArgs, char* command)
 		job_list.job_remove();						/*lets clean bg world*/
 		copy(command_vec.front().begin(), command_vec.front().end(), args);
 		status = processReturnValue(args, command_vec.front().size() - 1, command, token.front());
+
 		
 		if(status == FAIL)
 			cout<<"status command failed\n";
@@ -177,8 +191,10 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 		numArgs++;
 	}
 	int op = identify_cmd(args[0]);
-	if((status == BG) & (op == 5))
-		cout << "smash error: fg: cannot run in background" << endl; 
+	if((status == BG) & (op == 5)){
+		cout << "smash error: fg: cannot run in background" << endl;
+		return 1;/////might cause problems
+	}
 
 	if(((status == FG) && (op > -1)) || (op == 5)){								/*homemade function in fg*/
 		//cout<<"homemade function in fg\n";
@@ -214,8 +230,13 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 				// cout << "(son): external\n";
 				setpgrp();
 				execvp(args[0], args);
+				if(errno==ENOENT){
+					cout<<"smash error: external: cannot find program"<<endl;
+				}
+				else{
+					cout<<"smash error: external: invalid command"<<endl;
+				}
 				//execvp never returns unless upon error
-				perror("smash error: execvp failed");
 				exit(1); 
 			}
 			else{
@@ -232,15 +253,13 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 				if (waitpid(pid, &exit_state, WUNTRACED) == -1)	
 				{
 					std::perror("smash error: waitpid failed");
-					return '4';
+					return FAIL;
 				}	
 				if(complex_op)
 					complex_state = exit_state;
 				job_list.fg_job_remove(pid, exit_state);
 
 				if(WIFEXITED(exit_state) && (WEXITSTATUS(exit_state)!=0)) //determines if a child exited with exit()
-					cout << "smash error: external command in fg had exit status != 0\n";
-				
 				return status;
 			}
 		}
@@ -261,7 +280,7 @@ int identify_cmd(char* cmd){
 
 void showpid (){
 	int pid  = getpid();
-	cout << "pid is " << pid << "\n" ;
+	cout << "smash pid is " << pid << "\n" ;
 	return;
 }
 int pwd(){
@@ -280,7 +299,7 @@ int cd(char* path){
 	char temp [MAX_LINE_SIZE];
 	if(!strcmp(path,"-")){
 		if(job_list.jobs[0].prev_wd[0]=='\0'){
-			cout << "error: cd: old pwd not set" << endl;
+			cout << "smash error: cd: old pwd not set" << endl;
 			return 0;
 		}
 		prev_jump=true;
@@ -362,11 +381,14 @@ int fg(char* job_id_str, int numArgs){
 	if(retval!=0){
 		perror("smash error: kill failed");
 	}
-    if (waitpid(job_pid, &status, 0) == -1) {
+    if (waitpid(job_pid, &status, WUNTRACED) == -1) {
         perror("smash error: waitpid failed");
         return 1;
     }
-    return status;
+	if(WIFSTOPPED(status)!=0){
+		job_list.fg_job_remove(job_pid,(char)status);
+	}
+	return 0;
 }
 int bg(char* job_id_str, int numArgs){
 	int job_id;
@@ -378,7 +400,7 @@ int bg(char* job_id_str, int numArgs){
 			}
 		}
 		if(job_id==0){
-			cout << "smash error: bg: there are no stopped jobs to resume"<<endl;
+			cout << "smash error: bg: there are no stopped jobs to resume" <<endl;
 			return 1;
 		}
 	}
@@ -398,82 +420,85 @@ int bg(char* job_id_str, int numArgs){
 			return 1;
 		}
     }
-	cout << job_list.jobs[job_id].command<< ": " << job_id << endl;
+	cout << job_list.jobs[job_id].command<< ": " << job_list.jobs[job_id].pid << endl;
 	int ret_val=kill(job_list.jobs[job_id].pid,SIGCONT);
 	if(ret_val!=0){
 		perror("smash error: kill failed");
+		return 1;
 	}
 	else{
-		job_list.jobs[job_id].status=BG;
+		job_list.stat_change(job_list.jobs[job_id].pid,BG);
+		//cout<<"job 1 status is "<<job_list.jobs[1].status<<endl;
+		//cout<<"job 1 full is "<<job_list.jobs[1].full<<endl;
+		return 0;
 	}
-	cout<<"bg retval= "<<ret_val<<endl;
-	return(ret_val*-1);	//retval gets 0 on kill() success and -1 on fail so multiplying by -1 sets retval to the wanted 1 or 0
 }
 int quit(int numArgs, char* arg_1) {
-    if ((numArgs == 1) && (!strcmp(arg_1, "kill"))) {
-        for (int i = 1; i < MAX_ARGS + 1; i++) {
-            if (job_list.jobs[i].full) {
-                bool terminated = false;
-                cout << "[" << i << "] " << job_list.jobs[i].command << " - ";
+    if (numArgs == 1) {
+		if(!strcmp(arg_1, "kill")){
+			for (int i = 1; i < MAX_ARGS + 1; i++) {
+				if (job_list.jobs[i].full) {
+					bool terminated = false;
+					cout << "[" << i << "] " << job_list.jobs[i].command << " - ";
 
-                // Attempt to continue the process
-                if (kill(job_list.jobs[i].pid, SIGCONT) == -1) {
-                    perror("smash error: kill failed");
-                    return 1;
-                }
-
-                // Send SIGTERM
-                if (kill(job_list.jobs[i].pid, SIGTERM) == -1) {
-                    perror("smash error: kill failed");
-                    return 1;
-                }
-                cout << "sending SIGTERM... ";
-                // Wait for the process to terminate
-                for (int j = 0; j < 5; j++) {
-                    int status;
-                    pid_t result = waitpid(job_list.jobs[i].pid, &status, WNOHANG);
-
-                    if (result == -1) {
-                        perror("smash error: waitpid failed");
-                        return 1; // Stop waiting if there's an error
-                    }
-
-                    if (result > 0) { // Process has terminated
-                        if (WIFEXITED(status) || WIFSIGNALED(status)) {
-                            cout << "done" << endl;
-                            terminated = true;
-                            break;
-                        }
-                    }
-
-                    sleep(1); // Wait 1 second before checking again
-                }
-
-                // If not terminated, send SIGKILL
-                if (!terminated) {
-                    cout << "sending SIGKILL... done" << endl;
-                    if (kill(job_list.jobs[i].pid, SIGKILL) == -1) {
-                        perror("smash error: kill failed");
+					// Attempt to continue the process
+					if (kill(job_list.jobs[i].pid, SIGCONT) == -1) {
+						perror("smash error: kill failed");
 						return 1;
-                    }
-                }
+					}
 
-                // Clean up the job entry
-                job_list.jobs[i].full = false;
-            }
-        }
+					// Send SIGTERM
+					if (kill(job_list.jobs[i].pid, SIGTERM) == -1) {
+						perror("smash error: kill failed");
+						return 1;
+					}
+					cout << "sending SIGTERM... ";
+					// Wait for the process to terminate
+					for (int j = 0; j < 5; j++) {
+						int status;
+						pid_t result = waitpid(job_list.jobs[i].pid, &status, WNOHANG);
+
+						if (result == -1) {
+							perror("smash error: waitpid failed");
+							return 1; // Stop waiting if there's an error
+						}
+
+						if (result > 0) { // Process has terminated
+							if (WIFEXITED(status) || WIFSIGNALED(status)) {
+								cout << "done" << endl;
+								terminated = true;
+								break;
+							}
+						}
+
+						sleep(1); // Wait 1 second before checking again
+					}
+
+					// If not terminated, send SIGKILL
+					if (!terminated) {
+						cout << "sending SIGKILL... done" << endl;
+						if (kill(job_list.jobs[i].pid, SIGKILL) == -1) {
+							perror("smash error: kill failed");
+							return 1;
+						}
+					}
+
+					// Clean up the job entry
+					job_list.jobs[i].full = false;
+				}
+			}
+			exit(0);
+		}
+		else{
+			cout<< "smash error: quit: unexpected arguments"<<endl;
+			return 1;
+		}
     }
+	else{
+		exit(0);
+	}
     // Clean up and exit
-    exit(0);
 }
-#include <iostream>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <cstring>
-#include <cerrno>
-using namespace std;
-
 int diff(char* path1, char* path2) {
     int f1, f2;
     int ret_val1, ret_val2;
@@ -573,7 +598,7 @@ int diff(char* path1, char* path2) {
 int run_command(int op, char* args[MAX_ARGS], int numArgs){
 
 	switch (op){
-		case 0	: {
+		case SHOWPID	: { //call showpid
 			if(numArgs!=0){
 				cout << "smash error: showpid: expected 0 arguments\n";
 				return 1;
@@ -581,25 +606,25 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			showpid();
 			return 0;
 		}
-		case 1	: {
+		case PWD		: { //call pwd
 			if(numArgs != 0){
-				cout <<"error: pwd: expected 0 arguments\n";
+				cout <<"smash error: pwd: expected 0 arguments\n";
 				return 1;
 			}
 			return pwd();
 		}
-		case 2	: { 
+		case CD			: { //call cd
 			if(numArgs!=1){
-				cout << "smash error: cd: expected 1 arguments";
+				cout << "smash error: cd: expected 1 arguments"<<endl;
 				return 1;
 			}
 			return cd(args[1]);
 		}
-		case 3	: {
+		case JOBS		: {	//call jobs
 			jobs();
 			return 0; 				
 		}
-		case 4	: { 
+		case KILL		: { //call kill_func
     		if (numArgs != 2) {
         		cout << "smash error: kill: invalid arguments\n";
         		return 1;
@@ -617,28 +642,29 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			// If both arguments are valid, call kill_func
 			return kill_func(signum, job_id);
 		}
-		case 5	: {
+		case FG_F		: {	//call fg
 			if(numArgs>1){
 				cout << "smash error: fg: invalid arguments" <<endl;
 				return 1;
 			}
 			return fg(args[1],numArgs);
 		}
-		case 6	: {
+		case BG_F		: {	//call bg
 			if(numArgs>1){
 				cout << "smash error: bg: invalid arguments" <<endl;
 				return 1;
 			}
-			return bg(args[1],numArgs);
+			int retval=bg(args[1],numArgs);
+			return retval;
 		}
-		case 7	: {
+		case QUIT		: {	//call quit
 			if(1<numArgs){
 				cout << "smash error: quit: unexpected arguments" <<endl;
 				return 1;
 			}
-			quit(numArgs,args[1]);
+			return quit(numArgs,args[1]);
 		}
-		case 8	: {
+		case DIFF		: {	//call diff
 			if(numArgs!=2){
 				cout << "smash error: diff: expected 2 arguments" << endl;
 				return 1;
