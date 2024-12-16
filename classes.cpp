@@ -128,10 +128,12 @@ void job_arr::job_remove(){
 			// if(pid == complex_pid)
 			// 	complex_state = status;
 				
-			// if(WIFSTOPPED(status))									//proc stopped
+			if(WIFSTOPPED(status))									//proc stopped
+				return;
 			// 	jobs[i].status = STOPPED;
 			
-			// else if(WIFCONTINUED(status))							//proc continued
+			else if(WIFCONTINUED(status))							//proc continued
+				return;
 			// 	jobs[i].status = BG;
 				
 			else if(pid == jobs[i].pid){							//proc reaped
