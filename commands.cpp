@@ -63,7 +63,7 @@ void Complex_SpaceCheck(char* &tmp, int &numArgs)
 			token.push_back(true);
 		else
 			token.push_back(false);
-			
+
 		command_vec.emplace_back();
 		return;
 	} 
@@ -78,7 +78,6 @@ void Complex_SpaceCheck(char* &tmp, int &numArgs)
 				i++;
 
 			if(i>1){
-				cout<<"here testi="<<i<<"\n";
 				char* tmp2_copy = new char[strlen(tmp2) + 1];
 				strcpy(tmp2_copy, tmp2);
 				command_vec.back().push_back(tmp2_copy);
