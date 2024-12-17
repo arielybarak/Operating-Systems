@@ -65,7 +65,7 @@ void handle_ctrl_z(int sig) {
 	sigfillset(&maskSet);
 	sigprocmask(SIG_SETMASK, &maskSet, &oldSet);
 
-	cout << "\nsmash: caught CTRL+Z\nsmash > ";
+	cout << "\nsmash: caught CTRL+Z\n";
 	if(job_list.jobs[0].full && job_list.jobs[0].is_external){
 
 		if (!kill(job_list.jobs[0].pid, SIGSTOP)) {

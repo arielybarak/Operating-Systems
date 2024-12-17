@@ -38,6 +38,7 @@ extern int complex_i;
 * job class functions
 =============================================================================*/
 
+// Constructor for the job class, initializes all members to default values
 job::job(){
 	pid=0;
 	*command='\0';
@@ -54,9 +55,11 @@ job_arr :: job_arr(){
 	job_count = 0;
 	free_idx = 1;
 }
-/*	@brief returns the index that contains the process with pid as its pid, 
-	returns -1 if process with pid wasnt found
-  	@param pid of wanted process*/
+/**
+ * @brief Returns the index that contains the process with the specified PID.
+ * @param pid The PID of the desired process.
+ * @return The index if found, or -1 if the process was not found.
+ */
 int job_arr::get_job_idx(pid_t pid){
 	for(int i=0; i<=MAX_ARGS+1;i++){
 		if((jobs[i].pid==pid)&&(jobs[i].full)){
@@ -66,6 +69,15 @@ int job_arr::get_job_idx(pid_t pid){
 	return -1;
 }
 
+/**
+ * @brief Inserts a job into the job array.
+ * @param pid Process ID of the job.
+ * @param status Status of the job (e.g., FG, BG, STOPPED).
+ * @param command Command string associated with the job.
+ * @param is_external Boolean indicating if the job is external.
+ * @param complex_op Boolean indicating if the operation is complex.
+ * @return 0 on success, 1 if the job list is full.
+ */
 int job_arr::job_insert(pid_t pid, char status, char* command, bool is_external, bool complex_op){
 	if(job_count >= 100){
 		cout << "fail to insert job, job list is full\n";
@@ -99,6 +111,11 @@ int job_arr::job_insert(pid_t pid, char status, char* command, bool is_external,
 	return 0;
 }
 
+/**
+ * @brief Removes a foreground job from the job array.
+ * @param pid Process ID of the job.
+ * @param status Status of the job.
+ */
 void job_arr::fg_job_remove(pid_t pid, char status){
 
 	if(WIFSTOPPED(status)){									//fg stopped
@@ -107,12 +124,13 @@ void job_arr::fg_job_remove(pid_t pid, char status){
 	}
 	else if(pid == jobs[0].pid)							//fg reaped
 		jobs[0].full = false;		
-	
-	
+		jobs[0].pid=getpid();
 	return;
 }
 
-
+/**
+ * @brief Removes completed or stopped background jobs.
+ */
 void job_arr::job_remove(){
 	int status;	
 	pid_t pid;
@@ -151,7 +169,9 @@ void job_arr::job_remove(){
 // extern int complex_i;
 
 
-
+/**
+ * @brief Removes a complex job from the job array.
+ */
 void job_arr::complexJob_remove(){
 	pid_t pid;
 
@@ -162,24 +182,28 @@ void job_arr::complexJob_remove(){
 		complex_state = 1;
 		return;
 	}
-		
-	// if(WIFSTOPPED(complex_state))									//proc stopped
+	
+	// if(WIFSTOPPED(complex_state))			//proc stopped
 	// 	jobs[complex_i].status = STOPPED;
 	
-	// else if(WIFCONTINUED(complex_state))							//proc continued
+	// else if(WIFCONTINUED(complex_state))		//proc continued
 	// 	jobs[complex_i].status = BG;
 		
-	else if(pid == complex_pid){									//proc reaped
+	else if(pid == complex_pid){				//proc reaped
 		free_idx = (free_idx < complex_i) ? free_idx : complex_i;
 		job_count--;
 		jobs[complex_i].full = false;
 	}
-
 	return ;
 }
 
 
-
+/**
+ * @brief Changes the status of a job.
+ * @param pid Process ID of the job.
+ * @param stat New status of the job.
+ * @return 0 on success, 1 if the job was not found.
+ */
 int job_arr::stat_change(int pid, char stat){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid == pid){
@@ -190,6 +214,10 @@ int job_arr::stat_change(int pid, char stat){
 	cout << "fail to change status\n";
 	return 1;
 }
+
+/**
+ * @brief Prints all jobs in the job array.
+ */
 void job_arr::print(){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].full){
@@ -202,10 +230,21 @@ void job_arr::print(){
 		}
 	}
 }
+
+/**
+ * @brief Prints the foreground job.
+ */
 void job_arr::print_fg_job(){
 		cout << "print_fg_job: " << jobs[0].command << " " << jobs[0].pid;
 		cout << endl;
 }
+
+
+/**
+ * @brief Moves a job to the foreground.
+ * @param pid Process ID of the job to move to the foreground.
+ * @return 0 on success, 1 if the job was not found.
+ */
 int job_arr::job_2_front(int pid){
 	for(int i=1; i<MAX_ARGS+1; i++){
 		if(jobs[i].pid==pid){

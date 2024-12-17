@@ -44,15 +44,24 @@ extern vector<bool> token;
 pid_t complex_pid = -1;
 pid_t complex_state = -1;
 int  complex_i;
-bool flag;							//doesn't have to be global, organization reasons.
+bool flag;
 
 
-//example function for parsing commands
+/**
+* @brief Runs the command with the corresponding op code
+* @param op op code of desired function
+* @param args the arguments for the function
+* @param numArgs number of arguments in args
+* @return 0 if the function finished successfuly, 1 otherwise.
+*/
+int run_command(int op, char* args[MAX_ARGS], int numArgs);
 
-int run_command(int op, char* args[MAX_ARGS], int numArgs);;
+/**
+* @brief identifies the which command was run
+* @param cmd the command in string form
+* @return op code of the command to run or -1 if its external
+*/
 int identify_cmd(char* cmd);
-bool jobs();
-
 
 
 void Complex_SpaceCheck(char* &tmp, int &numArgs)
@@ -125,7 +134,6 @@ void Complex_SpaceCheck(char* &tmp, int &numArgs)
 }
 
 
-
 int parseCommand(char* line)
 {
 	char delimiters[]=" \t\n"; 
@@ -175,7 +183,7 @@ void command_manager(int numArgs, char* command)
 		copy(command_vec.front().begin(), command_vec.front().end(), args);
 
 		strcpy(command, args[0]); 
-		for (int i = 1; i < command_vec.front().size(); ++i) {
+		for (size_t i = 1; i < command_vec.front().size(); ++i) {
 			strcat(command, " ");   
 			strcat(command, args[i]); 
 		}
@@ -205,9 +213,14 @@ void command_manager(int numArgs, char* command)
 }
 
 
-
-// @brief process the given command and run it
-// @param args array, number of args job array
+/**
+* @brief brief process the given command and run it
+* @param args the arguments for the function
+* @param numArgs number of arguments in args
+* @param command command to run in string form
+* @param complex_op flag if the command is complex or not
+* @return 0 if the command finished successfuly, 1 otherwise.
+*/
 char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool complex_op)
 {
 	pid_t pid;
@@ -299,8 +312,14 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 	return status;
 }
 
-// @brief identifys which command and returns the corresponding index
-// @param gets a string containing a command
+
+/**
+* @brief Runs the command with the corresponding op code
+* @param op op code of desired function
+* @param args the arguments for the function
+* @param numArgs number of arguments in args
+* @return 0 if the function finished successfuly, 1 otherwise.
+*/
 int identify_cmd(char* cmd){
 	for (int i=0; i<9; i++){
 		if(!strcmp(commands[i], cmd)){
@@ -310,11 +329,18 @@ int identify_cmd(char* cmd){
 	return -1 ;
 }
 
+/**
+* @brief prints smash PID
+*/
 void showpid (){
-	int pid  = getpid();
-	cout << "smash pid is " << pid << "\n" ;
+	cout << "smash pid is " << job_list.jobs[0].pid << "\n" ;
 	return;
 }
+
+/**
+* @brief Prints current working directory
+* @return 0 if the function finished successfuly, 1 otherwise.
+*/
 int pwd(){
 	char buffer[MAX_LINE_SIZE]="\0";
 	char* retval=getcwd(buffer,MAX_LINE_SIZE);
@@ -325,6 +351,12 @@ int pwd(){
 	cout << buffer << endl;
 	return 0;
 }
+
+/**
+* @brief Changes current working directory
+* @param path string containing the desired path
+* @return 0 if the function finished successfuly, 1 otherwise.
+*/
 int cd(char* path){
 	int retval=0;
 	bool prev_jump=false;
@@ -332,7 +364,7 @@ int cd(char* path){
 	if(!strcmp(path,"-")){
 		if(job_list.jobs[0].prev_wd[0]=='\0'){
 			cout << "smash error: cd: old pwd not set" << endl;
-			return 0;
+			return 1;
 		}
 		prev_jump=true;
 		strcpy(temp,job_list.jobs[0].prev_wd);
@@ -345,21 +377,35 @@ int cd(char* path){
 		if(retval){ // @todo check the error(noam)
 			if(errno==ENOENT){
 				cout << "smash error: cd: target directory does not exist" << endl;
+				return 1;
 			}
 			else{
 				std::perror("smash error: chdir failed");
+				return 1;
 			}
 		}
 		else{
 			strcpy(job_list.jobs[0].prev_wd,temp);
 		}
 	}
-	return retval;
+	return 0;
 }
-bool jobs(){
+
+/**
+* @brief prints all jobs in the list
+* @return 0 always
+*/
+int jobs(){
 	job_list.print();
 	return 0;
 }
+
+/**
+* @brief sends signal to desired process
+* @param signum signal number to send
+* @param job_id job number to send the signal to
+* @return 0 if the signal was sent, 1 otherwise
+*/
 int kill_func(int signum , int job_id){
 	if(!job_list.jobs[job_id].full){
 		cout << "job id " << job_id << " does not exist"<< endl;
@@ -375,6 +421,13 @@ int kill_func(int signum , int job_id){
 	}
 	return retval;
 }
+
+/**
+* @brief moves job from list to the foreground
+* @param job_id_str job id in the form of a string
+* @param numArgs number of arguments added to the command
+* @return 0 if the job was successfuly moved, 1 otherwise
+*/
 int fg(char* job_id_str, int numArgs){
 	int job_id;
 	if(numArgs==0){
@@ -408,6 +461,7 @@ int fg(char* job_id_str, int numArgs){
 		cout << "move to front failed"<<endl; 
 		return 1;
 	}
+	cout << job_list.jobs[0].command<< ": " << job_list.jobs[0].pid << endl;
 	int status;
 	int retval=kill(job_pid,SIGCONT);
 	if(retval!=0){
@@ -422,6 +476,13 @@ int fg(char* job_id_str, int numArgs){
 	}
 	return 0;
 }
+
+/**
+* @brief continues a process stopped in the background
+* @param job_id_str job id in the form of a string
+* @param numArgs number of arguments added to the command
+* @return 0 if the job was continued, 1 otherwise
+*/
 int bg(char* job_id_str, int numArgs){
 	int job_id;
 	if(numArgs==0){
@@ -460,11 +521,16 @@ int bg(char* job_id_str, int numArgs){
 	}
 	else{
 		job_list.stat_change(job_list.jobs[job_id].pid,BG);
-		//cout<<"job 1 status is "<<job_list.jobs[1].status<<endl;
-		//cout<<"job 1 full is "<<job_list.jobs[1].full<<endl;
 		return 0;
 	}
 }
+
+/**
+* @brief exits smash, kills all jobs if asked to
+* @param numArgs number of arguments added to the command
+* @param arg_1 contains the word "kill" to indicate
+* @return doesnt return if succesful, returns 1 otherwise
+*/
 int quit(int numArgs, char* arg_1) {
     if (numArgs == 1) {
 		if(!strcmp(arg_1, "kill")){
@@ -531,6 +597,13 @@ int quit(int numArgs, char* arg_1) {
 	}
     // Clean up and exit
 }
+
+/**
+* @brief compares two files passed to it prints 0 if contents match and 1 otherwise
+* @param path1 path to first file
+* @param path2 path to second file
+* @return returns 0 if finished succesfuly and 1 otherwise
+*/
 int diff(char* path1, char* path2) {
     int f1, f2;
     int ret_val1, ret_val2;
@@ -626,7 +699,13 @@ int diff(char* path1, char* path2) {
 }
 
 
-// @brief runs the command identified
+/**
+* @brief Runs the command with the corresponding op code
+* @param op op code of desired function
+* @param args the arguments for the function
+* @param numArgs number of arguments in args
+* @return 0 if the function finished successfuly, 1 otherwise.
+*/
 int run_command(int op, char* args[MAX_ARGS], int numArgs){
 
 	switch (op){
@@ -653,6 +732,10 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 			return cd(args[1]);
 		}
 		case JOBS		: {	//call jobs
+			if(numArgs!=0){
+				cout << "smash error: jobs: expected 0 arguments\n";
+				return 1;
+			}
 			jobs();
 			return 0; 				
 		}
@@ -706,28 +789,6 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs){
 		default: return 0;
 	}
 }
-
-
-// int jobs_update(){
-// 	int status;									
-//     pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED); 
-// 	// if (pid == -1){ 
-// 	// 		std::perror("smash error: waitpid failed");
-// 	// 		return 1;
-// 	// }
-// 	if(WIFEXITED(status))							//WIFEXITED determines if a child exited with exit()
-// 		cout << "child " << pid << " exited with exit()\n";
-	
-
-// 	int result = job_list.job_remove(pid, status);
-
-// 	if(result==2)
-// 		job_list.job_insert(pid, STOPPED, job_list.jobs[0].command, true);
-
-// 	return result;
-// }
-
-//cout << "pid: " << job_list.jobs[i].pid << "external: "<< job_list.jobs[i].is_external << " finnished\n";
 
 
 	
