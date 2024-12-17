@@ -53,10 +53,13 @@ int run_command(int op, char* args[MAX_ARGS], int numArgs);;
 int identify_cmd(char* cmd);
 bool jobs();
 
+
+
 void Complex_SpaceCheck(char* &tmp, int &numArgs)
 {
 	char* tmp2 = new char[MAX_ARGS];
 	int i=0, j=0;
+	bool flag = false;
 	
 	if((!strcmp(tmp, "&&")) || (!strcmp(tmp, ";"))){
 		if(!strcmp(tmp, "&&")) 
@@ -70,6 +73,23 @@ void Complex_SpaceCheck(char* &tmp, int &numArgs)
 
 	while (tmp[i] != '\0') {
 
+		if((tmp[i] == '%') && (tmp[i+1] != '\0')){
+
+			if(i>0){
+				char* tmp2_copy = new char[j+1];
+				strncpy(tmp2_copy, tmp2, j);
+				tmp2_copy[j] = '\0';
+				command_vec.back().push_back(tmp2_copy);
+				j = 0;
+			}
+			char* tmp2_copy = new char[2];
+			strcpy(tmp2_copy,"%");
+			tmp2_copy[1] = '\0';
+			command_vec.back().push_back(tmp2_copy);
+			flag = true;
+			i++;
+		}
+
 		if ((tmp[i] == ';') || ((tmp[i] == '&') && (tmp[i+1] == '&'))) {
 			
 			tmp2[j] = '\0'; 
@@ -77,18 +97,21 @@ void Complex_SpaceCheck(char* &tmp, int &numArgs)
 			if(!(tmp[i] == ';'))
 				i++;
 
-			if(i>1){
-				char* tmp2_copy = new char[strlen(tmp2) + 1];
-				strcpy(tmp2_copy, tmp2);
-				command_vec.back().push_back(tmp2_copy);
+			if(((i>0) && (tmp[i] == ';')) || ((i>1) && !(tmp[i] == ';'))){
+
+				if(!flag){
+					char* tmp2_copy = new char[strlen(tmp2) + 1];
+					strcpy(tmp2_copy, tmp2);
+					command_vec.back().push_back(tmp2_copy);
+				}
 			}
 
 			token.push_back(!(tmp[i] == ';'));
 			command_vec.emplace_back();
 		}
-		else {
+		else 
 			tmp2[j++] = tmp[i]; 
-		}
+		
 		i++;
 	}
 
@@ -96,11 +119,12 @@ void Complex_SpaceCheck(char* &tmp, int &numArgs)
 	if(strlen(tmp2)>0){
 		char* tmp2_copy = new char[strlen(tmp2) + 1];
         strcpy(tmp2_copy, tmp2);
-
 		command_vec.back().push_back(tmp2_copy);
 	}
 	delete[] tmp2;
 }
+
+
 
 int parseCommand(char* line)
 {
@@ -122,7 +146,6 @@ int parseCommand(char* line)
 		numArgs++;
 		tmp = strtok(NULL, delimiters); 
 		if(tmp == NULL){
-			// command_vec.back().push_back(tmp);
 			numArgs--;
 			break;
 		}
@@ -144,15 +167,22 @@ void command_manager(int numArgs, char* command)
 	char status;
 
 	while(!command_vec.empty()){
-		// cout<<"manager loop\n";
+
 		complex_state = -1;
 		complex_pid = -1;
 		
 		job_list.job_remove();						/*lets clean bg world*/
 		copy(command_vec.front().begin(), command_vec.front().end(), args);
+
+		strcpy(command, args[0]); 
+		for (int i = 1; i < command_vec.front().size(); ++i) {
+			strcat(command, " ");   
+			strcat(command, args[i]); 
+		}
+
 		status = processReturnValue(args, command_vec.front().size() - 1, command, token.front());
 
-		
+
 		if(status == FAIL)
 			cout<<"status command failed\n";
 		
@@ -184,6 +214,7 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 	char status = FG;
 	int ret;
 	args[numArgs+1] = NULL;
+	
 	status = (!strcmp(args[numArgs], "%")) ? BG : FG;
 	int last_arg_len=strlen(args[numArgs]);
 	if((status==FG)&&(args[numArgs][last_arg_len-1]=='%')){
@@ -191,6 +222,7 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 		args[numArgs][last_arg_len-1]='\0';
 		numArgs++;
 	}
+
 	int op = identify_cmd(args[0]);
 	if((status == BG) & (op == 5)){
 		cout << "smash error: fg: cannot run in background" << endl;
@@ -205,7 +237,6 @@ char processReturnValue(char* args[MAX_ARGS], int numArgs, char* command, bool c
 		job_list.fg_job_remove(pid, 0);
 		if(complex_op)
 			complex_state = ret;
-			// cout << "complex_state: "<<complex_state<<"\n";
 	}
 	else
 	{
